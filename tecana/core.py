@@ -3937,7 +3937,7 @@ class Tecana:
         df = self._prepare_df(df, required_cols=['close', 'bbh', 'bbl'])
 
         initial_cols = len(df.columns)
-        df = dx(df, period)
+        df = self.dx(df, period)
         df.loc[(df['close'] >= df['bbh']) & (df['dip'] > df['din']), 'bb_t'] = 1
         df.loc[(df['close'] <= df['bbl']) & (df['dip'] < df['din']), 'bb_t'] = -1
         if initial_cols + 1 < len(df.columns):
@@ -4013,7 +4013,7 @@ class Tecana:
         df = self._prepare_df(df, required_cols=['close', 'dcm'])
 
         initial_cols = len(df.columns)
-        df = dx(df, period)
+        df = self.dx(df, period)
         df.loc[(df['close'] > df['dcm']) & (df['dip'] > df['din']), 'dc_t'] = -1
         df.loc[(df['close'] < df['dcm']) & (df['dip'] < df['din']), 'dc_t'] = 1
         if initial_cols + 1 < len(df.columns):
@@ -4374,7 +4374,7 @@ class Tecana:
 
         add_adi = False
         if 'adi' not in df.columns:
-            df = adi(df)
+            df = self.adi(df)
             add_adi = True
 
         df['obvmacd'] = df['obv'].ewm(span=r2, adjust=False).mean() - df['adi'].ewm(span=r1, adjust=False).mean()
