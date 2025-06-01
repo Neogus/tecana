@@ -39,6 +39,13 @@ df = ta.rsi_m(df)  # Momentum signal
 df = ta.rsi_z(df)  # Zone signal (overbought/oversold)
 df = ta.rsi_t(df)  # Trend signal
 
+## Demo
+
+You can test the library in this notebook:
+
+https://colab.research.google.com/drive/1BT6Utx_AelOxjPkMqUpFptMX3CH0WUdl?usp=sharing
+
+
 Indicator Categories
 Trend Indicators
 SMA, EMA, DEMA, TEMA, KAMA, MACD, Bollinger Bands, Parabolic SAR, Ichimoku Cloud, and more.

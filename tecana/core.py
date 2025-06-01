@@ -244,6 +244,35 @@ class Tecana:
 
         return df.drop(['median price'], axis=1)
 
+    def bb(self, df, window=20, num_std=2):
+        """
+        Bollinger Bands
+
+        A volatility indicator that plots upper and lower bands based on the standard deviation of price
+        around a moving average. It helps identify overbought or oversold conditions.
+
+        Parameters:
+        - df (DataFrame): Input data containing 'close' column.
+        - window (int): Period for the simple moving average and standard deviation.
+        - num_std (int or float): Number of standard deviations for the upper and lower bands.
+
+        Returns:
+        - DataFrame with added 'bbh', 'bbl', and 'bbv' columns:
+            - 'bbh': Bollinger Band High (upper band)
+            - 'bbl': Bollinger Band Low (lower band)
+            - 'bbv': Bollinger Band Width (bbh - bbl)
+        """
+        df = self._prepare_df(df, required_cols=['close'])
+
+        df['sma'] = df['close'].rolling(window=window).mean()
+        std = df['close'].rolling(window=window).std()
+
+        df['bbh'] = df['sma'] + num_std * std
+        df['bbl'] = df['sma'] - num_std * std
+        df['bbv'] = df['bbh'] - df['bbl']
+
+        return df.drop(['sma'], axis=1)
+
     def cc(self, df, short_roc_period=11, long_roc_period=14, smoothing_period=10, r=3):
         """
         Coppock Curve
