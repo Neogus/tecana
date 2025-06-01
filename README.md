@@ -68,7 +68,7 @@ but prohibits selling the software itself or derivatives. See the LICENSE file f
 ## Support Development
 If you find Tecana useful and would like to support its development:
 
-- **Bitcoin (Netowork: BTC - SegWit):** `bc1q496gksyalywftwg4q0hjqs4nuexgxpe638h6lu`
-- **Ethereum (Netowork: ETH - ERC20):** `0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3`
-- **Solana (Netowork: SOL - Solana):** `534JQmpyuA9a4WZvdRW33aon3n69r2od61SQcX8EfSxn`
-- **USDC (Netowork: ETH - ERC20):** `0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3`
+- Bitcoin (Netowork: BTC - SegWit): bc1q496gksyalywftwg4q0hjqs4nuexgxpe638h6lu
+- Ethereum (Netowork: ETH - ERC20): 0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3
+- Solana (Netowork: SOL - Solana): 534JQmpyuA9a4WZvdRW33aon3n69r2od61SQcX8EfSxn
+- USDC (Netowork: ETH - ERC20): 0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3

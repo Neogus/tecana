@@ -1,19 +1,22 @@
 from setuptools import setup, find_packages
+import os
 
-with open("README.md", "r", encoding="utf-8") as fh:
+# Load shorter README for PyPI
+this_directory = os.path.abspath(os.path.dirname(__file__))
+with open(os.path.join(this_directory, "README_PYPI.md"), "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
     name="tecana",
-    version="0.1.0",
+    version="0.4.0",
     author="Gustavo Rabino",
     author_email="gusrab@gmail.com",
     description="A high-performance technical analysis library for financial markets",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/tecana",
+    url="https://github.com/neogus/tecana",
     project_urls={
-        "Bug Tracker": "https://github.com/yourusername/tecana/issues",
+        "Bug Tracker": "https://github.com/neogus/tecana/issues",
     },
     classifiers=[
         "Programming Language :: Python :: 3",
