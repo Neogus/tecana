@@ -55,7 +55,8 @@ class Tecana:
 
         Examples
         --------
-        >>> df = tec.custom(df,
+
+        df = tec.custom(df,
         ...     ['rsi'],               # Uses default parameters
         ...     ['macd', 12, 26, 9],   # With multiple parameters
         ...     ['bb', 20],            # With single parameter
@@ -131,41 +132,59 @@ class Tecana:
         df = self._prepare_df(df, required_cols=['close', 'high', 'low', 'volume'])
 
         # Calculate Money Flow Multiplier
-        df['money flow multiplier'] = ((df['close'] - df['low']) - (df['high'] - df['close'])) / (
-                    df['high'] - df['low'])
-        df['money flow volume'] = df['money flow multiplier'] * df['volume']
-        df['adi'] = df['money flow volume'].rolling(window=period).sum() / df['volume'].rolling(window=period).sum()
+        high_low_range = df['high'] - df['low']
+        mfm = np.where(high_low_range != 0,
+                       ((df['close'] - df['low']) - (df['high'] - df['close'])) / high_low_range,
+                       0)
 
-        return df.drop(['money flow multiplier', 'money flow volume'], axis=1)
+        # Calculate Money Flow Volume
+        mfv = mfm * df['volume']
+
+        # Calculate ADI as cumulative sum (not average)
+        df['adi'] = pd.Series(mfv).cumsum()
+
+        return df
 
     def ai(self, df, window=25):
         """
-        Aaron Indicator
+        Aroon Indicator
 
-        Identifies trend changes in price and strength of trends. Consists of two lines - Aaron Up (AIU) and Aaron Down (AID).
+        Identifies trend changes in price by tracking days since highest high and lowest low.
+        Consists of two lines - Aroon Up (AIU) and Aroon Down (AID).
 
         Parameters:
         - df (DataFrame): Input data containing 'high' and 'low' columns.
-        - window (int): Period over which to calculate the Aaron Indicator.
+        - window (int): Period over which to calculate the Aroon Indicator.
 
         Returns:
-        - DataFrame with added 'aiu' and 'aid' columns.
+        - DataFrame with added 'aiu' (Aroon Up) and 'aid' (Aroon Down) columns.
         """
         df = self._prepare_df(df, required_cols=['high', 'low'])
 
-        # Calculate rolling max index
-        rolling_max_index_high = df['high'].rolling(window=window, min_periods=1).max().shift(-(window - 1))
-        rolling_max_index_low = df['low'].rolling(window=window, min_periods=1).max().shift(-(window - 1))
+        # Create rolling windows for high and low
+        high_roll = df['high'].rolling(window=window, min_periods=1)
+        low_roll = df['low'].rolling(window=window, min_periods=1)
 
-        # Check if rolling max index equals window size
-        up_days = (rolling_max_index_high == df['high']).astype(int)
-        down_days = (rolling_max_index_low == df['low']).astype(int)
+        # Get indices of max high and min low within each window
+        # Note: idxmax and idxmin return the index labels, not the positions
+        high_idx = high_roll.apply(lambda x: x.index[-1] - x.idxmax() if len(x) > 0 else 0, raw=False)
+        low_idx = low_roll.apply(lambda x: x.index[-1] - x.idxmin() if len(x) > 0 else 0, raw=False)
 
-        # Calculate AI_Up and AI_Down
-        df['aiu'] = (window - up_days * window) / window * 100
-        df['aiu'] = np.where(up_days > 0, df['aiu'], 0)
-        df['aid'] = (window - down_days * window) / window * 100
-        df['aid'] = np.where(down_days > 0, df['aid'], 0)
+        # Convert time deltas to number of periods
+        high_periods = high_idx / pd.Timedelta('1D')
+        low_periods = low_idx / pd.Timedelta('1D')
+
+        # If index is not datetime, we need an alternative approach
+        if not isinstance(df.index, pd.DatetimeIndex):
+            # Use rolling apply with custom function
+            high_idx = high_roll.apply(lambda x: np.argmax(x) if len(x) > 0 else 0, raw=True)
+            low_idx = low_roll.apply(lambda x: np.argmin(x) if len(x) > 0 else 0, raw=True)
+            high_periods = window - 1 - high_idx
+            low_periods = window - 1 - low_idx
+
+        # Calculate Aroon indicators
+        df['aiu'] = 100 * (window - high_periods) / window
+        df['aid'] = 100 * (window - low_periods) / window
 
         return df
 
@@ -238,11 +257,17 @@ class Tecana:
         """
         df = self._prepare_df(df, required_cols=['high', 'low'])
 
-        df['median price'] = (df['high'] + df['low']) / 2
-        df['awo'] = df['median price'].rolling(window=period1).mean() - df['median price'].rolling(
-            window=period2).mean()
+        # Calculate median price
+        median_price = (df['high'] + df['low']) / 2
 
-        return df.drop(['median price'], axis=1)
+        # Calculate SMAs of median price (not EMAs of close)
+        sma1 = median_price.rolling(window=period1).mean()
+        sma2 = median_price.rolling(window=period2).mean()
+
+        # Calculate Awesome Oscillator
+        df['awo'] = sma1 - sma2
+
+        return df
 
     def bb(self, df, window=20, num_std=2):
         """
@@ -761,31 +786,48 @@ class Tecana:
         Returns:
         - DataFrame with an added 'kama' column.
         """
+
         df = self._prepare_df(df, required_cols=['close'])
 
-        # Calculate the Efficiency Ratio (ER)
-        change = df['close'].diff(period).abs()
-        delta = df['close'].diff().abs().rolling(window=period).sum()
-        efficiency_ratio = change / delta
+        # Calculate Efficiency Ratio (ER)
+        change = np.abs(df['close'] - df['close'].shift(period))
+        volatility = df['close'].diff().abs().rolling(window=period).sum()
 
-        # Calculate the Smoothing Constant (SC)
-        smoothing_constant_fast = 2 / (fast + 1)
-        smoothing_constant_slow = 2 / (slow + 1)
-        smoothing_constant = (efficiency_ratio * (
-                    smoothing_constant_fast - smoothing_constant_slow)) + smoothing_constant_slow
+        # Calculate ER with vectorized operations
+        er = np.where(volatility != 0, change / volatility, 0)
 
-        # Initialize KAMA with the first value as the initial close
-        df['kama'] = df['close']
+        # Calculate Smoothing Constant (SC)
+        fast_sc = 2 / (fast + 1)
+        slow_sc = 2 / (slow + 1)
+        sc = np.square(er * (fast_sc - slow_sc) + slow_sc)
 
-        # Calculate the KAMA values using cumulative operations
-        kama_shift = df['kama'].shift(1)  # Shift KAMA for previous value reference
-        kama_values = kama_shift + smoothing_constant * (df['close'] - kama_shift)
+        # Fill NaN values
+        sc = np.nan_to_num(sc)
+        close_array = df['close'].fillna(method='ffill').values
 
-        # Fill the first KAMA value with the first Close price
-        df['kama'].iloc[0] = df['close'].iloc[0]
+        # Create arrays for vectorized calculation
+        kama_array = np.zeros_like(close_array)
+        kama_array[period - 1] = close_array[period - 1]
 
-        # Use cumulative product and fill in the KAMA values
-        df['kama'].iloc[1:] = kama_values.iloc[1:]
+        # Define the recursive function to be used with np.frompyfunc
+        def kama_recurrence(prev, idx):
+            i = int(idx)
+            return prev + sc[i] * (close_array[i] - prev)
+
+        # Generate indices for accumulation (period to end)
+        indices = np.arange(period, len(df))
+
+        # Calculate KAMA recursively using numpy's frompyfunc and accumulate
+        vec_kama = np.frompyfunc(kama_recurrence, 2, 1)
+        kama_values = vec_kama.accumulate(indices, dtype=object, initial=kama_array[period - 1])
+
+        # Assign calculated values to the output array
+        kama_array[period:] = kama_values
+
+        # Assign to DataFrame
+        df['kama'] = kama_array
+
+        return df
 
         return df
 
@@ -983,21 +1025,32 @@ class Tecana:
         df = self._prepare_df(df, required_cols=['high', 'low', 'close', 'volume'])
 
         # Calculate typical price
-        df['typical_price'] = (df['high'] + df['low'] + df['close']) / 3
+        typical_price = (df['high'] + df['low'] + df['close']) / 3
 
         # Calculate raw money flow
-        df['raw_money_flow'] = df['typical_price'] * df['volume']
+        money_flow = typical_price * df['volume']
 
-        # Calculate money flow sums
-        rolling_raw_money_flow_sum = df['raw_money_flow'].rolling(window=window).sum()
-        rolling_raw_money_flow_shift_sum = df['raw_money_flow'].rolling(window=window).sum().shift()
+        # Generate money flow signals based on price changes
+        price_diff = typical_price.diff()
 
-        # Calculate MFI with handling for null values
-        mfi_values = 100 - (100 / (1 + (rolling_raw_money_flow_sum / rolling_raw_money_flow_shift_sum)))
-        mfi_values[rolling_raw_money_flow_shift_sum.isna()] = 50  # Set MFI to 50 when the shifted sum is null
-        df['mfi'] = mfi_values
+        # Create positive and negative money flow series
+        positive_flow = np.where(price_diff > 0, money_flow, 0)
+        negative_flow = np.where(price_diff < 0, money_flow, 0)
 
-        return df.drop(['typical_price', 'raw_money_flow'], axis=1)
+        # Convert to Series for rolling operations
+        positive_flow_series = pd.Series(positive_flow, index=df.index)
+        negative_flow_series = pd.Series(negative_flow, index=df.index)
+
+        # Calculate sums over periods
+        positive_sum = positive_flow_series.rolling(window=window).sum()
+        negative_sum = negative_flow_series.rolling(window=window).sum()
+
+        # Calculate MFI with handling for division by zero
+        df['mfi'] = np.where(negative_sum != 0,
+                             100 - (100 / (1 + positive_sum / negative_sum)),
+                             100)
+
+        return df
 
     def mi(self, df, window=25, s1=9, s2=9, p1=9, p2=9):
         """
@@ -1063,18 +1116,21 @@ class Tecana:
         """
         df = self._prepare_df(df, required_cols=['close', 'volume'])
 
-        # Initialize NVI
-        df['nvi'] = 1000
+        # Calculate volume change and price percent change
+        vol_change = df['volume'].diff()
+        price_pct_change = df['close'].pct_change()
 
-        # Identify days with decreased volume
-        decrease_volume_mask = df['volume'] < df['volume'].shift(1)
+        # Create multipliers: 1+price_change for volume decrease days, 1 for others
+        nvi_mult = np.where(vol_change < 0, 1 + price_pct_change, 1)
 
-        # Update NVI only on days with decreased volume
-        df.loc[decrease_volume_mask, 'nvi'] = df['nvi'].shift(1) * (
-                    1 + (df['close'] - df['close'].shift(1)) / df['close'].shift(1))
+        # Replace first value (NaN) with 1
+        nvi_mult = np.nan_to_num(nvi_mult, nan=1.0)
+
+        # Calculate NVI using cumulative product
+        df['nvi'] = 1000 * pd.Series(nvi_mult).cumprod()
 
         # Calculate signal line
-        df['nvis'] = df['close'].rolling(r).mean()
+        df['nvis'] = df['nvi'].rolling(r).mean()
 
         return df
 
@@ -1211,41 +1267,117 @@ class Tecana:
         potential entry and exit points.
 
         Parameters:
-        - df (DataFrame): Input data containing 'high', 'low', and 'close' columns.
+        - df (DataFrame): Input data containing 'high' and 'low' columns.
         - step (float): Acceleration factor step.
         - max_acceleration (float): Maximum acceleration factor.
 
         Returns:
         - DataFrame with an added 'psar' column.
         """
+        df = self._prepare_df(df, required_cols=['high', 'low'])
+
+        # Extract price data as arrays for faster operations
+        high = df['high'].values
+        low = df['low'].values
+        n = len(df)
+
+        # Pre-allocate output arrays (improves performance)
+        psar = np.zeros(n)
+        ep = np.zeros(n)  # Extreme Point
+        af = np.zeros(n)  # Acceleration Factor
+        trend = np.zeros(n, dtype=int)  # 1 for uptrend, -1 for downtrend
+
+        # Set initial values
+        trend[0] = 1  # Start with uptrend
+        psar[0] = np.min(low[:2]) - 0.01  # Start below first low
+        ep[0] = high[0]  # First extreme point
+        af[0] = step  # Initial acceleration
+
+        # Core PSAR calculation - this loop is unavoidable due to the nature of PSAR
+        for i in range(1, n):
+            # Calculate PSAR based on previous values
+            psar[i] = psar[i - 1] + af[i - 1] * (ep[i - 1] - psar[i - 1])
+
+            # Apply trend-based adjustments and check for reversals
+            if trend[i - 1] > 0:  # Previous uptrend
+                # Adjust PSAR to respect prior lows
+                psar[i] = min(psar[i], low[max(0, i - 2)], low[i - 1])
+
+                # Check for trend reversal (price moved below PSAR)
+                if low[i] < psar[i]:
+                    # Reverse trend direction
+                    trend[i] = -1
+                    psar[i] = ep[i - 1]  # Reset PSAR to prior extreme
+                    ep[i] = low[i]  # Set new extreme point
+                    af[i] = step  # Reset acceleration factor
+                else:
+                    # Continue uptrend
+                    trend[i] = 1
+                    ep[i] = max(ep[i - 1], high[i])  # Update extreme point if needed
+                    # Update acceleration factor if new extreme found
+                    af[i] = min(af[i - 1] + step, max_acceleration) if ep[i] > ep[i - 1] else af[i - 1]
+            else:  # Previous downtrend
+                # Adjust PSAR to respect prior highs
+                psar[i] = max(psar[i], high[max(0, i - 2)], high[i - 1])
+
+                # Check for trend reversal (price moved above PSAR)
+                if high[i] > psar[i]:
+                    # Reverse trend direction
+                    trend[i] = 1
+                    psar[i] = ep[i - 1]  # Reset PSAR to prior extreme
+                    ep[i] = high[i]  # Set new extreme point
+                    af[i] = step  # Reset acceleration factor
+                else:
+                    # Continue downtrend
+                    trend[i] = -1
+                    ep[i] = min(ep[i - 1], low[i])  # Update extreme point if needed
+                    # Update acceleration factor if new extreme found
+                    af[i] = min(af[i - 1] + step, max_acceleration) if ep[i] < ep[i - 1] else af[i - 1]
+
+        # Assign calculated PSAR to dataframe
+        df['psar'] = psar
+
+        return df
+
+    def psar2(self, df, step=0.02, max_acceleration=0.2):
+        """
+        Parabolic SAR (Stop and Reverse)
+        """
         df = self._prepare_df(df, required_cols=['high', 'low', 'close'])
 
-        # Initialize SAR, AF, and EP
-        df['sar'] = df['high'].rolling(window=2).min()
-        df['acceleration_factor'] = step
-        df['extreme_point'] = df['high'].rolling(window=2).max()
+        # For PSAR we need to use a more creative approach with auxiliary columns
+        # This is an approximation that uses features of the original algorithm
+        # but doesn't require explicit loops
 
-        # Calculate AF
-        df['acceleration_factor'] = np.where(df['close'] > df['sar'].shift(1),
-                                             np.minimum(df['acceleration_factor'].shift(1) + step, max_acceleration),
-                                             step)
+        # Calculate initial values using momentum
+        price_diff = df['close'].diff()
+        initial_trend = np.where(price_diff.iloc[1] > 0, 1, -1)
 
-        # Calculate EP
-        df['extreme_point'] = np.where((df['high'].shift(1) > df['high'].shift(2)) & (df['low'] < df['sar'].shift(1)),
-                                       df['high'].shift(1),
-                                       np.where((df['low'].shift(1) < df['low'].shift(2)) & (
-                                                   df['high'] > df['sar'].shift(1)),
-                                                df['low'].shift(1),
-                                                df['extreme_point'].shift(1)))
+        # Calculate ATR to serve as a baseline for PSAR distance
+        high_low = df['high'] - df['low']
+        high_close = np.abs(df['high'] - df['close'].shift())
+        low_close = np.abs(df['low'] - df['close'].shift())
+        true_range = np.maximum(high_low, np.maximum(high_close, low_close))
+        atr = true_range.rolling(window=14).mean()
 
-        # Calculate PSAR
-        df['psar'] = np.where(df['sar'].shift(1) + df['acceleration_factor'].shift(1) * (
-                    df['extreme_point'].shift(1) - df['sar'].shift(1)) > df['low'],
-                              df['high'],
-                              df['sar'].shift(1) + df['acceleration_factor'].shift(1) * (
-                                          df['extreme_point'].shift(1) - df['sar'].shift(1)))
+        # Create adaptive acceleration factor
+        volatility_ratio = atr / atr.rolling(window=30).mean()
+        adaptive_af = np.minimum(step * volatility_ratio, max_acceleration)
+        adaptive_af = adaptive_af.fillna(step)
 
-        return df.drop(['sar', 'acceleration_factor', 'extreme_point'], axis=1)
+        # Calculate basic PSAR levels
+        high_psar = df['high'].rolling(window=14).max() - (adaptive_af * atr)
+        low_psar = df['low'].rolling(window=14).min() + (adaptive_af * atr)
+
+        # Determine trend using price momentum and moving average crossover
+        short_ma = df['close'].rolling(window=5).mean()
+        long_ma = df['close'].rolling(window=20).mean()
+        trend = np.where(short_ma > long_ma, 1, -1)
+
+        # Calculate PSAR based on trend
+        df['psar'] = np.where(trend > 0, low_psar, high_psar)
+
+        return df
 
     def pvo(self, df, short_period=12, long_period=26, signal_period=9):
         """
@@ -1691,16 +1823,32 @@ class Tecana:
         """
         df = self._prepare_df(df, required_cols=['close', 'high', 'low'])
 
-        df['bps'] = df['close'] - df['low'].rolling(window=window1).min()
-        df['trs'] = df['high'].rolling(window=window1).max() - df['low'].rolling(window=window1).min()
-        df['uo'] = (df['bps'].rolling(window=window1).sum() / df['trs'].rolling(window=window1).sum() * 4 +
-                    df['close'].rolling(window=window2).sum() / (df['high'].rolling(window=window2).max() -
-                                                                 df['low'].rolling(window=window2).min()) * 2 +
-                    df['close'].rolling(window=window3).sum() / (df['high'].rolling(window=window3).max() -
-                                                                 df['low'].rolling(window=window3).min()) * 1) / (
-                               4 + 2 + 1) * 100
+        # Calculate previous close
+        prev_close = df['close'].shift(1)
 
-        return df.drop(['bps', 'trs'], axis=1)
+        # Calculate true low (min of current low or previous close)
+        true_low = np.minimum(df['low'], prev_close)
+
+        # Calculate buying pressure
+        buying_pressure = df['close'] - true_low
+
+        # Calculate true range components
+        hl = df['high'] - df['low']
+        hpc = np.abs(df['high'] - prev_close)
+        lpc = np.abs(df['low'] - prev_close)
+
+        # Get max of the three for true range
+        true_range = np.maximum(hl, np.maximum(hpc, lpc))
+
+        # Calculate the three averages using weights
+        avg1 = buying_pressure.rolling(window=window1).sum() / true_range.rolling(window=window1).sum()
+        avg2 = buying_pressure.rolling(window=window2).sum() / true_range.rolling(window=window2).sum()
+        avg3 = buying_pressure.rolling(window=window3).sum() / true_range.rolling(window=window3).sum()
+
+        # Calculate weighted Ultimate Oscillator
+        df['uo'] = 100 * ((4 * avg1 + 2 * avg2 + avg3) / 7)
+
+        return df
 
     def vhf(self, df, period=28):
         """
