@@ -1,6 +1,6 @@
 from .core import Tecana
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 _ta = Tecana()
 
