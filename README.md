@@ -14,30 +14,36 @@ A high-performance Python library for technical analysis of financial markets, o
 
 ```bash
 pip install tecana
-
+```
 Quick Start
+```
 import tecana as ta
 import pandas as pd
-
-# Load your OHLCV data
+```
+## Load your OHLCV data
+```
 df = pd.read_csv('your_data.csv')
-
-# Calculate single indicators
+```
+## Calculate single indicators
+```
 df = ta.rsi(df)
 df = ta.macd(df)
-
-# Apply multiple indicators efficiently in one call
+```
+## Apply multiple indicators efficiently in one call
+```
 df = ta.custom(df,
     ['rsi', 14],              # With specific parameter
     ['macd', 12, 26, 9],      # With multiple parameters
     ['bb', {'window': 20}],   # With keyword arguments
     ['atr']                   # With default parameters
 )
-
-# Calculate trading signals
+```
+## Calculate trading signals
+```
 df = ta.rsi_m(df)  # Momentum signal
 df = ta.rsi_z(df)  # Zone signal (overbought/oversold)
 df = ta.rsi_t(df)  # Trend signal
+```
 
 ## Demo
 
@@ -46,25 +52,26 @@ You can test the library in this notebook:
 https://colab.research.google.com/drive/1BT6Utx_AelOxjPkMqUpFptMX3CH0WUdl?usp=sharing
 
 
-Indicator Categories
-Trend Indicators
+## Indicator Categories
+-Trend Indicators
 SMA, EMA, DEMA, TEMA, KAMA, MACD, Bollinger Bands, Parabolic SAR, Ichimoku Cloud, and more.
 
-Momentum Indicators
+- Momentum Indicators
 RSI, Stochastic Oscillator, CCI, Williams %R, ADX, TRIX, Ultimate Oscillator, and more.
 
-Volatility Indicators
+- Volatility Indicators
 ATR, Bollinger Bands Width, Keltner Channel Width, Choppiness Index, and more.
 
-Volume Indicators
+- Volume Indicators
 OBV, Chaikin Money Flow, MFI, Volume Price Trend, Ease of Movement, and more.
 
-Signal Types
+## Signal Types
 Momentum Signals (_m): Identify potential reversals or continuations
 Zone Signals (_z): Identify overbought/oversold conditions
 Trend Signals (_t): Identify trend direction
 Volatility Signals (_v): Identify periods of high or low volatility
-Disclaimer
+
+## Disclaimer
 This software is provided 'as-is', without any express or implied warranty. The calculations and indicators provided by this library are for informational purposes only and should not be construed as financial advice. The author is not responsible for any errors, inaccuracies, or misuse of this library. Trading and investing involve risk, and you should always conduct your own research before making financial decisions. In no event will the author be held liable for any financial losses or damages arising from the use of this software.
 
 ## License
