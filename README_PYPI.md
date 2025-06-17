@@ -1,6 +1,6 @@
 # Tecana
 
-**Version:** 0.7.0
+**Version:** 0.8.0
 
 Tecana is a high-performance Python library for technical analysis of financial markets, optimized for speed and efficiency.
 
