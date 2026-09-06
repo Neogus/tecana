@@ -1,23 +1,15 @@
-[
-build-system
-]
+[build-system]
 requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[
-tool.black
-]
+[tool.black]
 line-length = 100
-target-version = ["py37", "py38", "py39", "py310", "py311"]
+target-version = ["py39", "py310", "py311", "py312"]
 
-[
-tool.isort
-]
+[tool.isort]
 profile = "black"
 line_length = 100
 
-[
-tool.pytest
-]
+[tool.pytest]
 testpaths = ["tests"]
 python_files = "test_*.py"
