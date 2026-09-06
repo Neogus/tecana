@@ -126,6 +126,16 @@ The output of this library is for **informational and educational purposes only*
 
 By using this library, you acknowledge and accept these risks.
 
+## 💖 Support This Project
+
+If you find this project useful, consider supporting its development:
+
+<a href="https://github.com/sponsors/Neogus">
+  <img src="https://img.shields.io/badge/Sponsor-❤️-ea4aaa?style=for-the-badge&logo=github" alt="GitHub Sponsors" />
+</a>
+
+Your support helps keep this project maintained and free for everyone. Thank you! 🙏
+
 ## License
 
 This project is licensed under a custom license that allows free use including commercial applications,
