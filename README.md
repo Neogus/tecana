@@ -133,6 +133,9 @@ If you find this project useful, consider supporting its development:
 <a href="https://github.com/sponsors/Neogus">
   <img src="https://img.shields.io/badge/Sponsor-❤️-ea4aaa?style=for-the-badge&logo=github" alt="GitHub Sponsors" />
 </a>
+<a href="https://ko-fi.com/neogus43222">
+  <img src="https://img.shields.io/badge/Ko--fi-Buy_me_a_coffee-FFDD00?style=for-the-badge&logo=kofi" alt="Ko-fi" />
+</a>
 
 Your support helps keep this project maintained and free for everyone. Thank you! 🙏
 
