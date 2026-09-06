@@ -41,7 +41,7 @@ All signals return int8: **-1** (buy), **0** (neutral), **+1** (sell).
 ## Links
 
 - **GitHub:** https://github.com/Neogus/tecana
-- **Demo:** https://colab.research.google.com/drive/1BT6Utx_AelOxjPkMqUpFptMX3CH0WUdl
+- **Demo:** https://colab.research.google.com/github/Neogus/tecana/blob/main/demo/tecana_demo.ipynb
 
 ## License
 

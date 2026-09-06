@@ -67,7 +67,7 @@ df = ta.bop_z(df)    # NEW: Balance of Power zone
 
 You can test the library in this notebook:
 
-https://colab.research.google.com/drive/1BT6Utx_AelOxjPkMqUpFptMX3CH0WUdl?usp=sharing
+https://colab.research.google.com/github/Neogus/tecana/blob/main/demo/tecana_demo.ipynb
 
 
 ## Indicator Categories
