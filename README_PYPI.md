@@ -2,7 +2,7 @@
 
 **Author:** Gustavo Rabino
 
-**Version:** 2.0.0
+**Version:** 2.0.2
 
 Tecana is a high-performance Python library for technical analysis of financial markets, optimized for speed and efficiency.
 
@@ -50,3 +50,9 @@ Tecana is licensed under a modified MIT License that allows free use, modificati
 ## Disclaimer
 
 This software is provided "as-is" without any express or implied warranty. The technical indicators and trading signals are based on mathematical formulas applied to historical price data. **There is no guarantee that calculations are free of errors, bugs, or inaccuracies.** The output is for informational and educational purposes only and should not be construed as financial advice. The author is not responsible for any financial losses or damages arising from the use of this software. Trading involves substantial risk of loss.
+
+## 💖 Support This Project
+
+If you find Tecana useful, consider supporting its development:
+
+[💖 GitHub Sponsors](https://github.com/sponsors/Neogus) · [☕ Ko-fi](https://ko-fi.com/neogus43222)

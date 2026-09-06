@@ -8,7 +8,7 @@ with open(os.path.join(this_directory, "README_PYPI.md"), "r", encoding="utf-8")
 
 setup(
     name="tecana",
-    version="2.0.1",
+    version="2.0.2",
     author="Gustavo Rabino",
     author_email="gusrab@gmail.com",
     description="A high-performance technical analysis library for financial markets",
