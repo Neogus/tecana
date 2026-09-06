@@ -55,4 +55,4 @@ This software is provided "as-is" without any express or implied warranty. The t
 
 If you find Tecana useful, consider supporting its development:
 
-[💖 GitHub Sponsors](https://github.com/sponsors/Neogus) · [☕ Ko-fi](https://ko-fi.com/neogus43222)
+[💖 GitHub Sponsors](https://github.com/sponsors/Neogus) · [☕ Ko-fi](https://ko-fi.com/neogus43222) · [☕ Buy Me a Coffee](https://buymeacoffee.com/neogus)
