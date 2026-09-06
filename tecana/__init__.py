@@ -1,16 +1,27 @@
 from .core import Tecana
 
-__version__ = '1.1.0'
+__version__ = '2.0.0'
 
 _ta = Tecana()
 
+accb = _ta.accb
+accb_v = _ta.accb_v
+accb_z = _ta.accb_z
 adi = _ta.adi
 adi_m = _ta.adi_m
 adi_t = _ta.adi_t
+adosc = _ta.adosc
+adosc_m = _ta.adosc_m
+adxr = _ta.adxr
+adxr_t = _ta.adxr_t
 ai = _ta.ai
 ai_m = _ta.ai_m
 ai_t = _ta.ai_t
+aiosc = _ta.aiosc
+aiosc_m = _ta.aiosc_m
 ao = _ta.ao
+apo = _ta.apo
+apo_m = _ta.apo_m
 atr = _ta.atr
 atr_m = _ta.atr_m
 atr_t = _ta.atr_t
@@ -22,6 +33,9 @@ bb = _ta.bb
 bb_t = _ta.bb_t
 bb_v = _ta.bb_v
 bb_z = _ta.bb_z
+bop = _ta.bop
+bop_m = _ta.bop_m
+bop_z = _ta.bop_z
 cc = _ta.cc
 cc_m = _ta.cc_m
 cc_z = _ta.cc_z
@@ -41,6 +55,9 @@ dc = _ta.dc
 dc_m = _ta.dc_m
 dc_t = _ta.dc_t
 dc_z = _ta.dc_z
+dema = _ta.dema
+dema_m = _ta.dema_m
+dema_t = _ta.dema_t
 di = _ta.di
 di_m = _ta.di_m
 di_z = _ta.di_z
@@ -74,6 +91,8 @@ ic = _ta.ic
 ic_m = _ta.ic_m
 ic_t = _ta.ic_t
 ic_z = _ta.ic_z
+imi = _ta.imi
+imi_z = _ta.imi_z
 kama = _ta.kama
 kama_m = _ta.kama_m
 kama_t = _ta.kama_t
@@ -87,6 +106,8 @@ kst_m = _ta.kst_m
 kst_t = _ta.kst_t
 lr = _ta.lr
 lr_t = _ta.lr_t
+lrs = _ta.lrs
+lrs_m = _ta.lrs_m
 macd = _ta.macd
 macd_m = _ta.macd_m
 macd_t = _ta.macd_t
@@ -97,7 +118,16 @@ mfi = _ta.mfi
 mfi_t = _ta.mfi_t
 mfi_z = _ta.mfi_z
 mi = _ta.mi
+midpr = _ta.midpr
+midpr_t = _ta.midpr_t
+midpt = _ta.midpt
+midpt_t = _ta.midpt_t
+mom = _ta.mom
+mom_m = _ta.mom_m
+mom_z = _ta.mom_z
 mp = _ta.mp
+natr = _ta.natr
+natr_v = _ta.natr_v
 null = _ta.null
 null_m = _ta.null_m
 null_t = _ta.null_t
@@ -130,6 +160,8 @@ roc = _ta.roc
 roc_m = _ta.roc_m
 roc_t = _ta.roc_t
 roc_z = _ta.roc_z
+rocp = _ta.rocp
+rocp_m = _ta.rocp_m
 rsi = _ta.rsi
 rsi_m = _ta.rsi_m
 rsi_z = _ta.rsi_z
@@ -140,6 +172,9 @@ so = _ta.so
 so_m = _ta.so_m
 so_t = _ta.so_t
 so_z = _ta.so_z
+sof = _ta.sof
+sof_m = _ta.sof_m
+sof_z = _ta.sof_z
 sroc = _ta.sroc
 sroc_t = _ta.sroc_t
 srsi = _ta.srsi
@@ -148,14 +183,26 @@ srsi_z = _ta.srsi_z
 stc = _ta.stc
 stc_m = _ta.stc_m
 stc_z = _ta.stc_z
+stdv = _ta.stdv
+stdv_v = _ta.stdv_v
 sz = _ta.sz
 sz_z = _ta.sz_z
+t3 = _ta.t3
+t3_m = _ta.t3_m
+t3_t = _ta.t3_t
+tema = _ta.tema
+tema_m = _ta.tema_m
+tema_t = _ta.tema_t
 tmf = _ta.tmf
 tmf_t = _ta.tmf_t
 tmo = _ta.tmo
 tmo_m = _ta.tmo_m
 tmo_z = _ta.tmo_z
 tp = _ta.tp
+trange = _ta.trange
+trima = _ta.trima
+trima_m = _ta.trima_m
+trima_t = _ta.trima_t
 trix = _ta.trix
 trix_m = _ta.trix_m
 trix_t = _ta.trix_t
@@ -201,27 +248,4 @@ wr = _ta.wr
 wr_t = _ta.wr_t
 wr_z = _ta.wr_z
 
-__all__ = ['adi', 'adi_m', 'adi_t', 'ai', 'ai_m', 'ai_t', 'ao', 'atr',
-           'atr_m', 'atr_t', 'atr_v', 'awo', 'awo_m', 'awo_t', 'bb',
-           'bb_t', 'bb_v', 'bb_z', 'cc', 'cc_m', 'cc_z', 'cci', 'cci_m',
-           'cci_z', 'ce', 'ci', 'ci1_v', 'ci2_v', 'cmf', 'cmf_t', 'cmo',
-           'cmo_t', 'custom', 'dc', 'dc_m', 'dc_t', 'dc_z', 'di', 'di_m',
-           'di_z', 'dma', 'dma_t', 'dpo', 'dpo_m', 'dpo_z', 'dx', 'dx_t',
-           'dx_z', 'ema', 'ema_m', 'ema_z', 'eom', 'eom_m', 'eom_t', 'eom_z',
-           'eri', 'eri_t', 'fi', 'fi_t', 'fi_z', 'fr', 'fr_m', 'fr_z', 'ha',
-           'ha_m', 'ha_t', 'ic', 'ic_m', 'ic_t', 'ic_z', 'kama', 'kama_m',
-           'kama_t', 'kama_z', 'kc', 'kc_m', 'kc_t', 'kc_z', 'kst', 'kst_m',
-           'kst_t', 'lr', 'lr_t', 'macd', 'macd_m', 'macd_t', 'mae', 'mae_m',
-           'mae_z', 'mfi', 'mfi_t', 'mfi_z', 'mi', 'mp', 'null', 'null_m',
-           'null_t', 'null_v', 'null_z', 'nvi', 'nvi_t', 'obv', 'obv_m',
-           'obv_t', 'pc', 'pc_t', 'pp', 'pp_m', 'pp_z', 'ppo', 'ppo_m',
-           'ppo_t', 'proc', 'proc_m', 'proc_z', 'psar', 'psar2', 'psar_m',
-           'psar_t', 'pvo', 'pvo_m', 'pvo_t', 'roc', 'roc_m', 'roc_t', 'roc_z',
-           'rsi', 'rsi_m', 'rsi_z', 'sma', 'sma_m', 'sma_z', 'so', 'so_m', 'so_t',
-           'so_z', 'sroc', 'sroc_t', 'srsi', 'srsi_m', 'srsi_z', 'stc', 'stc_m',
-           'stc_z', 'sz', 'sz_z', 'tmf', 'tmf_t', 'tmo', 'tmo_m', 'tmo_z', 'tp',
-           'trix', 'trix_m', 'trix_t', 'tsi', 'tsi_m', 'tsi_t', 'tsi_z', 'tti',
-           'tti_t', 'tv', 'tv_z', 'ui', 'ui_v', 'uo', 'uo_m', 'uo_t', 'uo_z', 'vhf',
-           'vhf1_v', 'vhf2_v', 'vi', 'vi_m', 'vi_t', 'vo', 'vo_v', 'vpt', 'vpt_m',
-           'vpt_t', 'vr', 'vroc', 'vroc_t', 'vs', 'vs_m', 'vs_z', 'vwap', 'vwap_t',
-           'wad', 'wad_z', 'wma', 'wma_m', 'wma_z', 'wr', 'wr_t', 'wr_z']
+__all__ = ['accb', 'accb_v', 'accb_z', 'adi', 'adi_m', 'adi_t', 'adosc', 'adosc_m', 'adxr', 'adxr_t', 'ai', 'ai_m', 'ai_t', 'aiosc', 'aiosc_m', 'ao', 'apo', 'apo_m', 'atr', 'atr_m', 'atr_t', 'atr_v', 'awo', 'awo_m', 'awo_t', 'bb', 'bb_t', 'bb_v', 'bb_z', 'bop', 'bop_m', 'bop_z', 'cc', 'cc_m', 'cc_z', 'cci', 'cci_m', 'cci_z', 'ce', 'ci', 'ci1_v', 'ci2_v', 'cmf', 'cmf_t', 'cmo', 'cmo_t', 'custom', 'dc', 'dc_m', 'dc_t', 'dc_z', 'dema', 'dema_m', 'dema_t', 'di', 'di_m', 'di_z', 'dma', 'dma_t', 'dpo', 'dpo_m', 'dpo_z', 'dx', 'dx_t', 'dx_z', 'ema', 'ema_m', 'ema_z', 'eom', 'eom_m', 'eom_t', 'eom_z', 'eri', 'eri_t', 'fi', 'fi_t', 'fi_z', 'fr', 'fr_m', 'fr_z', 'ha', 'ha_m', 'ha_t', 'ic', 'ic_m', 'ic_t', 'ic_z', 'imi', 'imi_z', 'kama', 'kama_m', 'kama_t', 'kama_z', 'kc', 'kc_m', 'kc_t', 'kc_z', 'kst', 'kst_m', 'kst_t', 'lr', 'lr_t', 'lrs', 'lrs_m', 'macd', 'macd_m', 'macd_t', 'mae', 'mae_m', 'mae_z', 'mfi', 'mfi_t', 'mfi_z', 'mi', 'midpr', 'midpr_t', 'midpt', 'midpt_t', 'mom', 'mom_m', 'mom_z', 'mp', 'natr', 'natr_v', 'null', 'null_m', 'null_t', 'null_v', 'null_z', 'nvi', 'nvi_t', 'obv', 'obv_m', 'obv_t', 'pc', 'pc_t', 'pp', 'pp_m', 'pp_z', 'ppo', 'ppo_m', 'ppo_t', 'proc', 'proc_m', 'proc_z', 'psar', 'psar2', 'psar_m', 'psar_t', 'pvo', 'pvo_m', 'pvo_t', 'roc', 'roc_m', 'roc_t', 'roc_z', 'rocp', 'rocp_m', 'rsi', 'rsi_m', 'rsi_z', 'sma', 'sma_m', 'sma_z', 'so', 'so_m', 'so_t', 'so_z', 'sof', 'sof_m', 'sof_z', 'sroc', 'sroc_t', 'srsi', 'srsi_m', 'srsi_z', 'stc', 'stc_m', 'stc_z', 'stdv', 'stdv_v', 'sz', 'sz_z', 't3', 't3_m', 't3_t', 'tema', 'tema_m', 'tema_t', 'tmf', 'tmf_t', 'tmo', 'tmo_m', 'tmo_z', 'tp', 'trange', 'trima', 'trima_m', 'trima_t', 'trix', 'trix_m', 'trix_t', 'tsi', 'tsi_m', 'tsi_t', 'tsi_z', 'tti', 'tti_t', 'tv', 'tv_z', 'ui', 'ui_v', 'uo', 'uo_m', 'uo_t', 'uo_z', 'vhf', 'vhf1_v', 'vhf2_v', 'vi', 'vi_m', 'vi_t', 'vo', 'vo_v', 'vpt', 'vpt_m', 'vpt_t', 'vr', 'vroc', 'vroc_t', 'vs', 'vs_m', 'vs_z', 'vwap', 'vwap_t', 'wad', 'wad_z', 'wma', 'wma_m', 'wma_z', 'wr', 'wr_t', 'wr_z']

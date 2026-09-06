@@ -5,9 +5,29 @@ import pandas as pd
 class Tecana:
     """
     Technical analysis library with optimized indicators and signals for financial data.
+
+    Signal Convention
+    -----------------
+    All signal methods (``_m``, ``_z``, ``_t``, ``_v`` suffixes) return an int8
+    column with values from ``{-1, 0, +1}``:
+
+    * **-1** = **BUY** signal (bullish condition detected)
+    * **+1** = **SELL** signal (bearish condition detected)
+    * **0**  = no signal (neutral / outside trigger zone)
+
+    Volatility signals (``_v`` suffix) are unidirectional flags:
+
+    * **1** = high-volatility regime detected
+    * **0** = normal volatility
+
+    .. warning::
+
+       Signals are mathematical pattern detections, **not** trading
+       recommendations.  They may contain errors or produce false positives.
+       Always validate with your own research before acting on any signal.
     """
 
-    def _prepare_df(self, df, required_cols):
+    def _prepare_df(self, df: pd.DataFrame, required_cols) -> pd.DataFrame:
         """
         Internal helper to standardize columns to lowercase and check required columns.
 
@@ -34,7 +54,101 @@ class Tecana:
 
         return df
 
-    def custom(self, df, *args):
+
+    @staticmethod
+    def _safe_div(numerator, denominator, fill=0.0):
+        """Element-wise division returning *fill* where *denominator* is zero.
+
+        Works with both :class:`pd.Series` and :class:`np.ndarray`.
+
+        Parameters
+        ----------
+        numerator : array-like
+            Dividend.
+        denominator : array-like
+            Divisor.
+        fill : float, default 0.0
+            Value to substitute where *denominator* == 0.
+
+        Returns
+        -------
+        pd.Series or np.ndarray
+        """
+        denom = np.where(np.asarray(denominator) == 0, np.nan, denominator)
+        result = numerator / denom
+        if isinstance(result, pd.Series):
+            return result.fillna(fill)
+        return np.nan_to_num(result, nan=fill)
+
+    @staticmethod
+    def _wilder_rma(series: pd.Series, window: int) -> pd.Series:
+        """Wilder's Running Moving Average (RMA / SMMA).
+
+        Equivalent to ``ewm(alpha=1/window)`` seeded with the first SMA.
+
+        Parameters
+        ----------
+        series : pd.Series
+        window : int
+
+        Returns
+        -------
+        pd.Series
+        """
+        return series.ewm(alpha=1.0 / window, min_periods=window, adjust=False).mean()
+
+    @staticmethod
+    def _sliding_argmax(series: pd.Series, window: int) -> pd.Series:
+        """Rolling argmax: 0-based position of the maximum within each window.
+
+        Parameters
+        ----------
+        series : pd.Series
+        window : int
+
+        Returns
+        -------
+        pd.Series
+        """
+        return series.rolling(window=window).apply(np.argmax, raw=True)
+
+    @staticmethod
+    def _sliding_argmin(series: pd.Series, window: int) -> pd.Series:
+        """Rolling argmin: 0-based position of the minimum within each window.
+
+        Parameters
+        ----------
+        series : pd.Series
+        window : int
+
+        Returns
+        -------
+        pd.Series
+        """
+        return series.rolling(window=window).apply(np.argmin, raw=True)
+
+    @staticmethod
+    def _finalize_signal(df: pd.DataFrame, col: str) -> pd.DataFrame:
+        """Coerce a signal column to the compact int8 ``{-1, 0, +1}`` encoding.
+
+        Replaces ``NaN`` (no-signal) with ``0`` and casts to ``int8``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+        col : str
+            Name of the signal column to finalize.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = df[col].fillna(0).astype(np.int8)
+        return df
+
+    def custom(self, df: pd.DataFrame, *args) -> pd.DataFrame:
         """
         Apply multiple indicators to a dataframe in a single call.
 
@@ -115,8 +229,11 @@ class Tecana:
                 error_msg = f"Error in item {i} ({func_name}):\n"
                 error_msg += f"Expected: {func_name}(df, {', '.join(expected_params)})\n"
                 error_msg += f"Received: {len(params)} positional args and {len(kwargs)} keyword args"
+                raise TypeError(error_msg) from e
 
-    def adi(self, df, period=14):
+        return result_df
+
+    def adi(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Accumulation/Distribution Index (ADI)
 
@@ -145,7 +262,7 @@ class Tecana:
 
         return df
 
-    def ai(self, df, window=25):
+    def ai(self, df: pd.DataFrame, window: int = 25) -> pd.DataFrame:
         """
         Aroon Indicator
 
@@ -188,7 +305,7 @@ class Tecana:
 
         return df
 
-    def ao(self, df, short_period=5, long_period=20):
+    def ao(self, df: pd.DataFrame, short_period: int = 5, long_period: int = 20) -> pd.DataFrame:
         """
         Aaron Oscillator
 
@@ -213,7 +330,7 @@ class Tecana:
 
         return df.drop(['ema_short', 'ema_long'], axis=1)
 
-    def atr(self, df, window=14):
+    def atr(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Average True Range (ATR)
 
@@ -241,7 +358,7 @@ class Tecana:
 
         return df.drop(['r'], axis=1)
 
-    def awo(self, df, period1=5, period2=34):
+    def awo(self, df: pd.DataFrame, period1: int = 5, period2: int = 34) -> pd.DataFrame:
         """
         Awesome Oscillator
 
@@ -269,7 +386,7 @@ class Tecana:
 
         return df
 
-    def bb(self, df, window=20, num_std=2):
+    def bb(self, df: pd.DataFrame, window: int = 20, num_std: float = 2) -> pd.DataFrame:
         """
         Bollinger Bands
 
@@ -298,7 +415,7 @@ class Tecana:
 
         return df.drop(['sma'], axis=1)
 
-    def cc(self, df, short_roc_period=11, long_roc_period=14, smoothing_period=10, r=3):
+    def cc(self, df: pd.DataFrame, short_roc_period: int = 11, long_roc_period: int = 14, smoothing_period: int = 10, r: int = 3) -> pd.DataFrame:
         """
         Coppock Curve
 
@@ -327,7 +444,7 @@ class Tecana:
 
         return df.drop(['short_roc', 'long_roc'], axis=1)
 
-    def cci(self, df, window=20):
+    def cci(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
         """
         Commodity Channel Index
 
@@ -355,7 +472,7 @@ class Tecana:
 
         return df
 
-    def ce(self, df, period=22, multiplier=3):
+    def ce(self, df: pd.DataFrame, period: int = 22, multiplier: float = 3) -> pd.DataFrame:
         """
         Chandelier Exit
 
@@ -380,7 +497,7 @@ class Tecana:
 
         return df.drop(['atrr'], axis=1)
 
-    def ci(self, df, period=14):
+    def ci(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Choppiness Index
 
@@ -408,7 +525,7 @@ class Tecana:
 
         return df.drop(['tro', 'atro', 'hl'], axis=1)
 
-    def cmf(self, df, window=14):
+    def cmf(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Chaikin Money Flow (CMF)
 
@@ -430,7 +547,7 @@ class Tecana:
 
         return df.drop(['mf_multiplier', 'mf_volume'], axis=1)
 
-    def cmo(self, df, period=14):
+    def cmo(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Chande Momentum Oscillator (CMO)
 
@@ -462,7 +579,7 @@ class Tecana:
 
         return df
 
-    def dc(self, df, period=20):
+    def dc(self, df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
         """
         Donchian Channels
 
@@ -484,7 +601,7 @@ class Tecana:
 
         return df
 
-    def di(self, df, window=10):
+    def di(self, df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
         """
         Disparity Index
 
@@ -504,7 +621,7 @@ class Tecana:
 
         return df.drop(['mas'], axis=1)
 
-    def dma(self, df, period=20, displacement=5):
+    def dma(self, df: pd.DataFrame, period: int = 20, displacement: int = 5) -> pd.DataFrame:
         """
         Displaced Moving Average
 
@@ -524,7 +641,7 @@ class Tecana:
 
         return df
 
-    def dpo(self, df, period=20):
+    def dpo(self, df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
         """
         Detrended Price Oscillator
 
@@ -543,7 +660,7 @@ class Tecana:
 
         return df
 
-    def dx(self, df, period=14):
+    def dx(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Directional Movement Index
 
@@ -588,7 +705,7 @@ class Tecana:
 
         return df.drop(['trs', 'dx', 'dm+', 'dm-', 'high-low', 'high-prevclose', 'low-prevclose'], axis=1)
 
-    def ema(self, df, w=20, ws=10):
+    def ema(self, df: pd.DataFrame, w: int = 20, ws: int = 10) -> pd.DataFrame:
         """
         Exponential Moving Average
 
@@ -609,7 +726,7 @@ class Tecana:
 
         return df
 
-    def eom(self, df):
+    def eom(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ease of Movement
 
@@ -630,7 +747,7 @@ class Tecana:
 
         return df
 
-    def eri(self, df, period=13):
+    def eri(self, df: pd.DataFrame, period: int = 13) -> pd.DataFrame:
         """
         Elder Ray Index
 
@@ -652,7 +769,7 @@ class Tecana:
 
         return df.drop(['emas'], axis=1)
 
-    def fi(self, df, period=13):
+    def fi(self, df: pd.DataFrame, period: int = 13) -> pd.DataFrame:
         """
         Force Index
 
@@ -675,7 +792,7 @@ class Tecana:
 
         return df.drop(['price change'], axis=1)
 
-    def fr(self, df, w1=25):
+    def fr(self, df: pd.DataFrame, w1: int = 25) -> pd.DataFrame:
         """
         Fibonacci Retracement
 
@@ -707,7 +824,7 @@ class Tecana:
 
         return df.drop(['highest high', 'lowest low'], axis=1)
 
-    def ha(self, df):
+    def ha(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Heikin-Ashi Candlesticks
 
@@ -736,7 +853,7 @@ class Tecana:
 
         return df
 
-    def ic(self, df, window1=9, window2=26, window3=52):
+    def ic(self, df: pd.DataFrame, window1: int = 9, window2: int = 26, window3: int = 52) -> pd.DataFrame:
         """
         Ichimoku Cloud
 
@@ -770,7 +887,7 @@ class Tecana:
 
         return df
 
-    def kama(self, df, period=10, fast=2, slow=30):
+    def kama(self, df: pd.DataFrame, period: int = 10, fast: int = 2, slow: int = 30) -> pd.DataFrame:
         """
         Kaufman's Adaptive Moving Average
 
@@ -831,7 +948,7 @@ class Tecana:
 
         return df
 
-    def kc(self, df, window=20, atr_window=10, multiplier=2):
+    def kc(self, df: pd.DataFrame, window: int = 20, atr_window: int = 10, multiplier: float = 2) -> pd.DataFrame:
         """
         Keltner Channels
 
@@ -871,7 +988,7 @@ class Tecana:
 
         return df
 
-    def kst(self, df, r1=10, r2=15, r3=20, r4=30, s1=10, s2=10, s3=10, s4=15, sp=9):
+    def kst(self, df: pd.DataFrame, r1: int = 10, r2: int = 15, r3: int = 20, r4: int = 30, s1: int = 10, s2: int = 10, s3: int = 10, s4: int = 15, sp: int = 9) -> pd.DataFrame:
         """
         Know Sure Thing (KST) Indicator
 
@@ -911,7 +1028,7 @@ class Tecana:
 
         return df.drop(['roc1', 'roc2', 'roc3', 'roc4', 'sma1', 'sma2', 'sma3', 'sma4'], axis=1)
 
-    def lr(self, df, period=14):
+    def lr(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Linear Regression Indicator
 
@@ -952,7 +1069,7 @@ class Tecana:
 
         return df
 
-    def macd(self, df, short_window=12, long_window=26, signal_window=9):
+    def macd(self, df: pd.DataFrame, short_window: int = 12, long_window: int = 26, signal_window: int = 9) -> pd.DataFrame:
         """
         Moving Average Convergence Divergence
 
@@ -984,7 +1101,7 @@ class Tecana:
 
         return df
 
-    def mae(self, df, window=20, percent=5):
+    def mae(self, df: pd.DataFrame, window: int = 20, percent: float = 5) -> pd.DataFrame:
         """
         Moving Average Envelope
 
@@ -1009,7 +1126,7 @@ class Tecana:
 
         return df.drop(['mae'], axis=1)
 
-    def mfi(self, df, window=14):
+    def mfi(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Money Flow Index
 
@@ -1052,7 +1169,7 @@ class Tecana:
 
         return df
 
-    def mi(self, df, window=25, s1=9, s2=9, p1=9, p2=9):
+    def mi(self, df: pd.DataFrame, window: int = 25, s1: int = 9, s2: int = 9, p1: int = 9, p2: int = 9) -> pd.DataFrame:
         """
         Mass Index
 
@@ -1083,7 +1200,7 @@ class Tecana:
 
         return df.drop(['range', 'single ema', 'double ema'], axis=1)
 
-    def mp(self, df):
+    def mp(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Median Price Indicator
 
@@ -1101,7 +1218,7 @@ class Tecana:
 
         return df
 
-    def nvi(self, df, r=14):
+    def nvi(self, df: pd.DataFrame, r: int = 14) -> pd.DataFrame:
         """
         Negative Volume Index
 
@@ -1134,7 +1251,7 @@ class Tecana:
 
         return df
 
-    def obv(self, df):
+    def obv(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         On-Balance Volume
 
@@ -1159,7 +1276,7 @@ class Tecana:
 
         return df
 
-    def pc(self, df, period=13):
+    def pc(self, df: pd.DataFrame, period: int = 13) -> pd.DataFrame:
         """
         Price Change
 
@@ -1178,7 +1295,7 @@ class Tecana:
 
         return df
 
-    def pp(self, df):
+    def pp(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Pivot Points
 
@@ -1205,7 +1322,7 @@ class Tecana:
 
         return df
 
-    def ppo(self, df, short_period=12, long_period=26, signal_period=9):
+    def ppo(self, df: pd.DataFrame, short_period: int = 12, long_period: int = 26, signal_period: int = 9) -> pd.DataFrame:
         """
         Percentage Price Oscillator
 
@@ -1240,7 +1357,7 @@ class Tecana:
 
         return df
 
-    def proc(self, df, window=14):
+    def proc(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Price Rate of Change
 
@@ -1259,7 +1376,7 @@ class Tecana:
 
         return df
 
-    def psar(self, df, step=0.02, max_acceleration=0.2):
+    def psar(self, df: pd.DataFrame, step: float = 0.02, max_acceleration: float = 0.2) -> pd.DataFrame:
         """
         Parabolic Stop and Reverse (PSAR)
 
@@ -1339,7 +1456,7 @@ class Tecana:
 
         return df
 
-    def psar2(self, df, step=0.02, max_acceleration=0.2):
+    def psar2(self, df: pd.DataFrame, step: float = 0.02, max_acceleration: float = 0.2) -> pd.DataFrame:
         """
         Parabolic SAR (Stop and Reverse)
         """
@@ -1379,7 +1496,7 @@ class Tecana:
 
         return df
 
-    def pvo(self, df, short_period=12, long_period=26, signal_period=9):
+    def pvo(self, df: pd.DataFrame, short_period: int = 12, long_period: int = 26, signal_period: int = 9) -> pd.DataFrame:
         """
         Percentage Volume Oscillator
 
@@ -1414,7 +1531,7 @@ class Tecana:
 
         return df
 
-    def roc(self, df, period=14, r=6):
+    def roc(self, df: pd.DataFrame, period: int = 14, r: int = 6) -> pd.DataFrame:
         """
         Rate of Change
 
@@ -1436,7 +1553,7 @@ class Tecana:
 
         return df
 
-    def rsi(self, df, w1=14):
+    def rsi(self, df: pd.DataFrame, w1: int = 14) -> pd.DataFrame:
         """
         Relative Strength Index
 
@@ -1467,7 +1584,7 @@ class Tecana:
 
         return df
 
-    def sma(self, df, w=20, ws=10):
+    def sma(self, df: pd.DataFrame, w: int = 20, ws: int = 10) -> pd.DataFrame:
         """
         Simple Moving Average
 
@@ -1488,7 +1605,7 @@ class Tecana:
 
         return df
 
-    def so(self, df, kw=14, dw=3):
+    def so(self, df: pd.DataFrame, kw: int = 14, dw: int = 3) -> pd.DataFrame:
         """
         Stochastic Oscillator
 
@@ -1511,7 +1628,7 @@ class Tecana:
 
         return df
 
-    def sroc(self, df, period=14, smoothing=3):
+    def sroc(self, df: pd.DataFrame, period: int = 14, smoothing: int = 3) -> pd.DataFrame:
         """
         Smoothed Rate of Change (SROC)
 
@@ -1533,7 +1650,7 @@ class Tecana:
 
         return df.drop('rocs', axis=1)
 
-    def srsi(self, df, w1=14, w2=14, smooth_k=3, smooth_d=3):
+    def srsi(self, df: pd.DataFrame, w1: int = 14, w2: int = 14, smooth_k: int = 3, smooth_d: int = 3) -> pd.DataFrame:
         """
         Stochastic RSI
 
@@ -1567,7 +1684,7 @@ class Tecana:
 
         return df
 
-    def stc(self, df, p1=23, p2=50, p3=10, f=0.5):
+    def stc(self, df: pd.DataFrame, p1: int = 23, p2: int = 50, p3: int = 10, f: float = 0.5) -> pd.DataFrame:
         """
         Schaff Trend Cycle (STC)
 
@@ -1598,7 +1715,7 @@ class Tecana:
 
         return df.drop(['ema1', 'ema2', 'macds'], axis=1)
 
-    def sz(self, df, period=14, multiplier=1):
+    def sz(self, df: pd.DataFrame, period: int = 14, multiplier: float = 1) -> pd.DataFrame:
         """
         Safe Zone Indicator
 
@@ -1621,7 +1738,7 @@ class Tecana:
 
         return df.drop(['atrs'], axis=1)
 
-    def tmf(self, df, period=21):
+    def tmf(self, df: pd.DataFrame, period: int = 21) -> pd.DataFrame:
         """
         Twiggs Money Flow (TMF)
 
@@ -1643,7 +1760,7 @@ class Tecana:
 
         return df.drop(['mfs', 'mfvs'], axis=1)
 
-    def tmo(self, df, short_period=10, long_period=21):
+    def tmo(self, df: pd.DataFrame, short_period: int = 10, long_period: int = 21) -> pd.DataFrame:
         """
         Twiggs Momentum Oscillator
 
@@ -1664,7 +1781,7 @@ class Tecana:
 
         return df.drop('momentum', axis=1)
 
-    def tp(self, df):
+    def tp(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Typical Price
 
@@ -1682,7 +1799,7 @@ class Tecana:
 
         return df
 
-    def trix(self, df, w=15, sw=7):
+    def trix(self, df: pd.DataFrame, w: int = 15, sw: int = 7) -> pd.DataFrame:
         """
         Triple Exponential Moving Average (TRIX)
 
@@ -1707,7 +1824,7 @@ class Tecana:
 
         return df.drop(['ema1', 'ema2', 'ema3'], axis=1)
 
-    def tsi(self, df, short_period=13, long_period=25, tsi_p=5, ema_period=7):
+    def tsi(self, df: pd.DataFrame, short_period: int = 13, long_period: int = 25, tsi_p: int = 5, ema_period: int = 7) -> pd.DataFrame:
         """
         True Strength Index
 
@@ -1735,7 +1852,7 @@ class Tecana:
 
         return df
 
-    def tti(self, df, period=21):
+    def tti(self, df: pd.DataFrame, period: int = 21) -> pd.DataFrame:
         """
         Twiggs Trend Index
 
@@ -1756,7 +1873,7 @@ class Tecana:
 
         return df.drop('smas', axis=1)
 
-    def tv(self, df, period=20):
+    def tv(self, df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
         """
         Twiggs Volatility
 
@@ -1781,7 +1898,7 @@ class Tecana:
 
         return df.drop(['trs', 'atrs'], axis=1)
 
-    def ui(self, df, w1=14, w2=14):
+    def ui(self, df: pd.DataFrame, w1: int = 14, w2: int = 14) -> pd.DataFrame:
         """
         Ulcer Index
 
@@ -1805,7 +1922,7 @@ class Tecana:
 
         return df.drop(['drawdown', 'squared_drawdown'], axis=1)
 
-    def uo(self, df, window1=7, window2=14, window3=28):
+    def uo(self, df: pd.DataFrame, window1: int = 7, window2: int = 14, window3: int = 28) -> pd.DataFrame:
         """
         Ultimate Oscillator
 
@@ -1850,7 +1967,7 @@ class Tecana:
 
         return df
 
-    def vhf(self, df, period=28):
+    def vhf(self, df: pd.DataFrame, period: int = 28) -> pd.DataFrame:
         """
         Vertical Horizontal Filter
 
@@ -1879,7 +1996,7 @@ class Tecana:
         return df.drop(['price change', 'abs price change', 'sum abs price change',
                         'highest high', 'lowest low', 'abs hh - ll'], axis=1)
 
-    def vi(self, df, period=14):
+    def vi(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Vortex Indicator
 
@@ -1908,7 +2025,7 @@ class Tecana:
 
         return df.drop(['trs', 'vmplus', 'vmneg'], axis=1)
 
-    def vo(self, df, short_period=14, long_period=28):
+    def vo(self, df: pd.DataFrame, short_period: int = 14, long_period: int = 28) -> pd.DataFrame:
         """
         Volume Oscillator
 
@@ -1931,7 +2048,7 @@ class Tecana:
 
         return df.drop(['smas', 'lmas'], axis=1)
 
-    def vpt(self, df, sp=5, lp=20):
+    def vpt(self, df: pd.DataFrame, sp: int = 5, lp: int = 20) -> pd.DataFrame:
         """
         Volume Price Trend
 
@@ -1954,7 +2071,7 @@ class Tecana:
 
         return df
 
-    def vr(self, df, period=20):
+    def vr(self, df: pd.DataFrame, period: int = 20) -> pd.DataFrame:
         """
         Volatility Ratio
 
@@ -1977,7 +2094,7 @@ class Tecana:
 
         return df.drop(['returns', 'std dev returns'], axis=1)
 
-    def vroc(self, df, short_period=12, long_period=26):
+    def vroc(self, df: pd.DataFrame, short_period: int = 12, long_period: int = 26) -> pd.DataFrame:
         """
         Volume Rate of Change
 
@@ -2000,7 +2117,7 @@ class Tecana:
 
         return df
 
-    def vs(self, df, period=14, multiplier=2):
+    def vs(self, df: pd.DataFrame, period: int = 14, multiplier: float = 2) -> pd.DataFrame:
         """
         Volatility Stops
 
@@ -2028,7 +2145,7 @@ class Tecana:
 
         return df.drop(['trv', 'atrv', 'high-low', 'high-prevclose', 'low-prevclose'], axis=1)
 
-    def vwap(self, df, window=14):
+    def vwap(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Volume Weighted Average Price
 
@@ -2049,7 +2166,7 @@ class Tecana:
 
         return df
 
-    def wad(self, df, p=14):
+    def wad(self, df: pd.DataFrame, p: int = 14) -> pd.DataFrame:
         """
         Williams Accumulation/Distribution
 
@@ -2072,7 +2189,7 @@ class Tecana:
 
         return df
 
-    def wma(self, df, p1=20, p2=9):
+    def wma(self, df: pd.DataFrame, p1: int = 20, p2: int = 9) -> pd.DataFrame:
         """
         Weighted Moving Average
 
@@ -2099,7 +2216,7 @@ class Tecana:
 
         return df
 
-    def wr(self, df, window=14):
+    def wr(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Williams %R
 
@@ -2120,7 +2237,7 @@ class Tecana:
 
         return df
 
-    def null(self, df):
+    def null(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Null Indicator
 
@@ -2139,13 +2256,515 @@ class Tecana:
 
         return df
 
+
+    # ── TA-Lib Expansion: New Indicators ───────────────────────────────
+
+    def dema(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Double Exponential Moving Average (DEMA).
+
+        Reduces lag vs standard EMA: ``2 * EMA - EMA(EMA)``.
+        Matches TA-Lib DEMA.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 20
+            EMA period.
+
+        Adds columns
+        ------------
+        ``dema`` : Double Exponential Moving Average of close.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        ema1 = df["close"].ewm(span=window, min_periods=window, adjust=False).mean()
+        ema2 = ema1.ewm(span=window, min_periods=window, adjust=False).mean()
+        df["dema"] = 2 * ema1 - ema2
+        return df
+
+    def tema(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Triple Exponential Moving Average (TEMA).
+
+        Further reduces lag: ``3*EMA - 3*EMA(EMA) + EMA(EMA(EMA))``.
+        Matches TA-Lib TEMA.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 20
+            EMA period.
+
+        Adds columns
+        ------------
+        ``tema`` : Triple Exponential Moving Average of close.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        ema1 = df["close"].ewm(span=window, min_periods=window, adjust=False).mean()
+        ema2 = ema1.ewm(span=window, min_periods=window, adjust=False).mean()
+        ema3 = ema2.ewm(span=window, min_periods=window, adjust=False).mean()
+        df["tema"] = 3 * ema1 - 3 * ema2 + ema3
+        return df
+
+    def t3(self, df: pd.DataFrame, window: int = 5, vfactor: float = 0.7) -> pd.DataFrame:
+        """Tillson T3 Moving Average.
+
+        A 6th-order smoothed EMA cascade with adjustable volume factor.
+        Matches TA-Lib T3 with default vfactor=0.7.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 5
+            EMA period for each cascade stage.
+        vfactor : float, default 0.7
+            Volume factor controlling smoothness vs lag (0 to 1).
+
+        Adds columns
+        ------------
+        ``t3`` : Tillson T3 moving average of close.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        c1 = -(vfactor ** 3)
+        c2 = 3 * vfactor ** 2 + 3 * vfactor ** 3
+        c3 = -6 * vfactor ** 2 - 3 * vfactor - 3 * vfactor ** 3
+        c4 = 1 + 3 * vfactor + vfactor ** 3 + 3 * vfactor ** 2
+        e1 = df["close"].ewm(span=window, min_periods=window, adjust=False).mean()
+        e2 = e1.ewm(span=window, min_periods=window, adjust=False).mean()
+        e3 = e2.ewm(span=window, min_periods=window, adjust=False).mean()
+        e4 = e3.ewm(span=window, min_periods=window, adjust=False).mean()
+        e5 = e4.ewm(span=window, min_periods=window, adjust=False).mean()
+        e6 = e5.ewm(span=window, min_periods=window, adjust=False).mean()
+        df["t3"] = c1 * e6 + c2 * e5 + c3 * e4 + c4 * e3
+        return df
+
+    def trima(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Triangular Moving Average (TRIMA).
+
+        SMA of SMA, giving more weight to the centre of the window.
+        Matches TA-Lib TRIMA.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 20
+            Period.
+
+        Adds columns
+        ------------
+        ``trima`` : Triangular Moving Average of close.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        half = (window + 1) // 2
+        sma1 = df["close"].rolling(window=half, min_periods=half).mean()
+        sma2_period = half if window % 2 == 1 else half + 1
+        df["trima"] = sma1.rolling(window=sma2_period, min_periods=sma2_period).mean()
+        return df
+
+    def mom(self, df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+        """Momentum (MOM): difference between current price and N bars ago.
+
+        Matches TA-Lib MOM: ``close - close.shift(window)``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 10
+            Look-back period.
+
+        Adds columns
+        ------------
+        ``mom`` : Price momentum (absolute difference).
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        df["mom"] = df["close"] - df["close"].shift(window)
+        return df
+
+    def apo(self, df: pd.DataFrame, fast: int = 12, slow: int = 26) -> pd.DataFrame:
+        """Absolute Price Oscillator (APO).
+
+        Absolute difference between fast and slow EMAs.
+        Matches TA-Lib APO: ``EMA(fast) - EMA(slow)``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        fast : int, default 12
+            Fast EMA period.
+        slow : int, default 26
+            Slow EMA period.
+
+        Adds columns
+        ------------
+        ``apo`` : Absolute Price Oscillator.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        ema_fast = df["close"].ewm(span=fast, min_periods=fast, adjust=False).mean()
+        ema_slow = df["close"].ewm(span=slow, min_periods=slow, adjust=False).mean()
+        df["apo"] = ema_fast - ema_slow
+        return df
+
+    def bop(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Balance of Power (BOP).
+
+        Measures buyer vs seller strength: ``(close - open) / (high - low)``.
+        Matches TA-Lib BOP.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``open``, ``high``, ``low``, ``close``.
+
+        Adds columns
+        ------------
+        ``bop`` : Balance of Power in [-1, +1].
+        """
+        df = self._prepare_df(df, required_cols=["open", "high", "low", "close"])
+        df["bop"] = self._safe_div(df["close"] - df["open"], df["high"] - df["low"], fill=0.0)
+        return df
+
+    def adosc(self, df: pd.DataFrame, fast: int = 3, slow: int = 10) -> pd.DataFrame:
+        """Chaikin A/D Oscillator (ADOSC).
+
+        EMA(fast) - EMA(slow) of the Accumulation/Distribution line.
+        Matches TA-Lib ADOSC.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``, ``high``, ``low``, ``volume``.
+        fast : int, default 3
+            Fast EMA period.
+        slow : int, default 10
+            Slow EMA period.
+
+        Adds columns
+        ------------
+        ``adosc`` : Chaikin A/D Oscillator.
+        """
+        df = self._prepare_df(df, required_cols=["close", "high", "low", "volume"])
+        hl_range = df["high"] - df["low"]
+        mfm = self._safe_div(
+            (df["close"] - df["low"]) - (df["high"] - df["close"]),
+            hl_range,
+            fill=0.0,
+        )
+        mfv = mfm * df["volume"]
+        ad_line = pd.Series(np.asarray(mfv), index=df.index).cumsum()
+        ema_fast = ad_line.ewm(span=fast, min_periods=fast, adjust=False).mean()
+        ema_slow = ad_line.ewm(span=slow, min_periods=slow, adjust=False).mean()
+        df["adosc"] = ema_fast - ema_slow
+        return df
+
+    def natr(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Normalized Average True Range (NATR).
+
+        ATR expressed as a percentage of close: ``100 * ATR / close``.
+        Matches TA-Lib NATR.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``, ``close``.
+        window : int, default 14
+            ATR period.
+
+        Adds columns
+        ------------
+        ``natr`` : Normalized ATR as percentage.
+        """
+        df = self._prepare_df(df, required_cols=["high", "low", "close"])
+        prev_close = df["close"].shift(1)
+        true_range = np.maximum.reduce([
+            (df["high"] - df["low"]).to_numpy(dtype=float),
+            (df["high"] - prev_close).abs().to_numpy(dtype=float),
+            (df["low"] - prev_close).abs().to_numpy(dtype=float),
+        ])
+        tr = pd.Series(true_range, index=df.index)
+        atr_val = self._wilder_rma(tr, window)
+        df["natr"] = self._safe_div(atr_val, df["close"]) * 100
+        return df
+
+    def trange(self, df: pd.DataFrame) -> pd.DataFrame:
+        """True Range (TRANGE): single-bar volatility measure.
+
+        Matches TA-Lib TRANGE: ``max(H-L, |H-Cp|, |L-Cp|)``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``, ``close``.
+
+        Adds columns
+        ------------
+        ``trange`` : True Range per bar.
+        """
+        df = self._prepare_df(df, required_cols=["high", "low", "close"])
+        prev_close = df["close"].shift(1)
+        df["trange"] = np.maximum.reduce([
+            (df["high"] - df["low"]).to_numpy(dtype=float),
+            (df["high"] - prev_close).abs().to_numpy(dtype=float),
+            (df["low"] - prev_close).abs().to_numpy(dtype=float),
+        ])
+        return df
+
+    def sof(self, df: pd.DataFrame, window: int = 14, smooth: int = 3) -> pd.DataFrame:
+        """Fast Stochastic Oscillator (STOCHF).
+
+        Raw %K (no %K smoothing) with %D = SMA(%K, smooth).
+        Matches TA-Lib STOCHF.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``, ``close``.
+        window : int, default 14
+            Look-back for highest-high and lowest-low.
+        smooth : int, default 3
+            SMA period for %D line.
+
+        Adds columns
+        ------------
+        ``sofk`` : Fast %K (raw).
+        ``sofd`` : Fast %D (SMA of %K).
+        """
+        df = self._prepare_df(df, required_cols=["high", "low", "close"])
+        lowest = df["low"].rolling(window=window).min()
+        highest = df["high"].rolling(window=window).max()
+        df["sofk"] = self._safe_div(df["close"] - lowest, highest - lowest) * 100
+        df["sofd"] = df["sofk"].rolling(window=smooth).mean()
+        return df
+
+    def aiosc(self, df: pd.DataFrame, window: int = 25) -> pd.DataFrame:
+        """Aroon Oscillator: Aroon Up minus Aroon Down.
+
+        Matches TA-Lib AROONOSC.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``.
+        window : int, default 25
+            Aroon look-back period.
+
+        Adds columns
+        ------------
+        ``aiosc`` : Aroon Oscillator in [-100, +100].
+        """
+        df = self._prepare_df(df, required_cols=["high", "low"])
+        up_offset = self._sliding_argmax(df["high"], window)
+        down_offset = self._sliding_argmin(df["low"], window)
+        periods_since_high = (window - 1) - up_offset
+        periods_since_low = (window - 1) - down_offset
+        aiu = 100.0 * (window - periods_since_high) / window
+        aid = 100.0 * (window - periods_since_low) / window
+        df["aiosc"] = aiu - aid
+        return df
+
+    def adxr(self, df: pd.DataFrame, window: int = 14, rating_period: int = 14) -> pd.DataFrame:
+        """Average Directional Movement Index Rating (ADXR).
+
+        Smoothed ADX: ``(ADX + ADX.shift(rating_period)) / 2``.
+        Matches TA-Lib ADXR.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``, ``close``.
+        window : int, default 14
+            ADX calculation period.
+        rating_period : int, default 14
+            Look-back for the rating average.
+
+        Adds columns
+        ------------
+        ``adxr`` : ADX Rating.
+        """
+        df = self.dx(df, period=window)
+        df["adxr"] = (df["adx"] + df["adx"].shift(rating_period)) / 2
+        return df
+
+    def imi(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Intraday Momentum Index (IMI).
+
+        Measures buying pressure via up-close candle ranges to total ranges.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``open``, ``close``.
+        window : int, default 14
+            Rolling window.
+
+        Adds columns
+        ------------
+        ``imi`` : Intraday Momentum Index in [0, 100].
+        """
+        df = self._prepare_df(df, required_cols=["open", "close"])
+        gains = (df["close"] - df["open"]).clip(lower=0)
+        losses = (df["open"] - df["close"]).clip(lower=0)
+        sum_gains = gains.rolling(window=window, min_periods=window).sum()
+        sum_losses = losses.rolling(window=window, min_periods=window).sum()
+        df["imi"] = self._safe_div(sum_gains, sum_gains + sum_losses) * 100
+        return df
+
+    def accb(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Acceleration Bands (ACCBANDS).
+
+        Upper and lower bands based on high-low range scaled by a factor.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``, ``close``.
+        window : int, default 20
+            SMA period.
+
+        Adds columns
+        ------------
+        ``accbu`` : Upper acceleration band.
+        ``accbl`` : Lower acceleration band.
+        ``accbm`` : Middle band (SMA of close).
+        """
+        df = self._prepare_df(df, required_cols=["high", "low", "close"])
+        factor = self._safe_div(df["high"] - df["low"], (df["high"] + df["low"]) / 2, fill=0.0)
+        upper = df["high"] * (1 + 2 * factor)
+        lower = df["low"] * (1 - 2 * factor)
+        df["accbu"] = upper.rolling(window=window, min_periods=window).mean()
+        df["accbl"] = lower.rolling(window=window, min_periods=window).mean()
+        df["accbm"] = df["close"].rolling(window=window, min_periods=window).mean()
+        return df
+
+    def midpt(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """MidPoint over period.
+
+        Matches TA-Lib MIDPOINT: ``(highest(close, n) + lowest(close, n)) / 2``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 14
+            Look-back period.
+
+        Adds columns
+        ------------
+        ``midpt`` : Midpoint of close over window.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        df["midpt"] = (
+            df["close"].rolling(window=window).max()
+            + df["close"].rolling(window=window).min()
+        ) / 2
+        return df
+
+    def midpr(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Midpoint Price over period.
+
+        Matches TA-Lib MIDPRICE: ``(rolling_max(high) + rolling_min(low)) / 2``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``high``, ``low``.
+        window : int, default 14
+            Look-back period.
+
+        Adds columns
+        ------------
+        ``midpr`` : Midpoint price over window.
+        """
+        df = self._prepare_df(df, required_cols=["high", "low"])
+        df["midpr"] = (
+            df["high"].rolling(window=window).max()
+            + df["low"].rolling(window=window).min()
+        ) / 2
+        return df
+
+    def lrs(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Linear Regression Slope.
+
+        Matches TA-Lib LINEARREG_SLOPE.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 14
+            Regression period.
+
+        Adds columns
+        ------------
+        ``lrs`` : Slope of linear regression over window.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        close_arr = df["close"].to_numpy(dtype=float)
+        n = len(close_arr)
+        slopes = np.full(n, np.nan, dtype=float)
+        x = np.arange(window, dtype=float)
+        x_mean = x.mean()
+        x_var = ((x - x_mean) ** 2).sum()
+        if n >= window:
+            windows = np.lib.stride_tricks.sliding_window_view(close_arr, window)
+            y_means = windows.mean(axis=1)
+            slopes[window - 1:] = (
+                (windows - y_means[:, None]) * (x - x_mean)
+            ).sum(axis=1) / x_var
+        df["lrs"] = slopes
+        return df
+
+    def rocp(self, df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+        """Rate of Change Percentage (fractional).
+
+        Matches TA-Lib ROCP: ``(close - close.shift(n)) / close.shift(n)``.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 10
+            Look-back period.
+
+        Adds columns
+        ------------
+        ``rocp`` : Fractional rate of change.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        prev = df["close"].shift(window)
+        df["rocp"] = self._safe_div(df["close"] - prev, prev)
+        return df
+
+    def stdv(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Rolling Standard Deviation.
+
+        Matches TA-Lib STDDEV.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Requires ``close``.
+        window : int, default 20
+            Rolling window.
+
+        Adds columns
+        ------------
+        ``stdv`` : Rolling standard deviation of close.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        df["stdv"] = df["close"].rolling(window=window, min_periods=window).std()
+        return df
+
     '''
     ---------------------------- Signals --------------------------------
     '''
 
     # Momentum Signals
 
-    def adi_m(self, df, r1=7, r2=21):
+    def adi_m(self, df: pd.DataFrame, r1: int = 7, r2: int = 21) -> pd.DataFrame:
         """
         Accumulation Distribution Index Momentum Signal
 
@@ -2173,7 +2792,7 @@ class Tecana:
 
         return df.drop(['adimacd', 'adimacds'], axis=1)
 
-    def ai_m(self, df):
+    def ai_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Aroon Indicator Momentum Signal
 
@@ -2195,7 +2814,7 @@ class Tecana:
 
         return df
 
-    def atr_m(self, df, d=2):
+    def atr_m(self, df: pd.DataFrame, d: int = 2) -> pd.DataFrame:
         """
         Average True Range Momentum Signal
 
@@ -2220,7 +2839,7 @@ class Tecana:
 
         return df
 
-    def awo_m(self, df):
+    def awo_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Awesome Oscillator Momentum Signal
 
@@ -2248,7 +2867,7 @@ class Tecana:
 
         return df
 
-    def cc_m(self, df):
+    def cc_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Coppock Curve Momentum Signal
 
@@ -2270,7 +2889,7 @@ class Tecana:
 
         return df
 
-    def cci_m(self, df, bz=100, sz=100):
+    def cci_m(self, df: pd.DataFrame, bz: float = 100, sz: float = 100) -> pd.DataFrame:
         """
         Commodity Channel Index Momentum Signal
 
@@ -2295,7 +2914,7 @@ class Tecana:
 
         return df
 
-    def dc_m(self, df):
+    def dc_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Donchian Channel Momentum Signal
 
@@ -2318,7 +2937,7 @@ class Tecana:
 
         return df
 
-    def di_m(self, df):
+    def di_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Disparity Index Momentum Signal
 
@@ -2341,7 +2960,7 @@ class Tecana:
 
         return df
 
-    def dpo_m(self, df):
+    def dpo_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Detrended Price Oscillator Momentum Signal
 
@@ -2364,7 +2983,7 @@ class Tecana:
 
         return df
 
-    def ema_m(self, df):
+    def ema_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Exponential Moving Average Momentum Signal
 
@@ -2387,7 +3006,7 @@ class Tecana:
 
         return df
 
-    def eom_m(self, df):
+    def eom_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ease of Movement Momentum Signal
 
@@ -2410,7 +3029,7 @@ class Tecana:
 
         return df
 
-    def fr_m(self, df, p=14):
+    def fr_m(self, df: pd.DataFrame, p: int = 14) -> pd.DataFrame:
         """
         Fibonacci Retracement Momentum Signal
 
@@ -2442,7 +3061,7 @@ class Tecana:
 
         return df
 
-    def ha_m(self, df):
+    def ha_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Heikin-Ashi Momentum Signal
 
@@ -2465,7 +3084,7 @@ class Tecana:
 
         return df
 
-    def ic_m(self, df):
+    def ic_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ichimoku Cloud Momentum Signal
 
@@ -2489,7 +3108,7 @@ class Tecana:
 
         return df
 
-    def kama_m(self, df):
+    def kama_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Kaufman's Adaptive Moving Average Momentum Signal
 
@@ -2512,7 +3131,7 @@ class Tecana:
 
         return df
 
-    def kc_m(self, df, w=14, q=1.35):
+    def kc_m(self, df: pd.DataFrame, w: int = 14, q: float = 1.35) -> pd.DataFrame:
         """
         Keltner Channel Momentum Signal
 
@@ -2551,7 +3170,7 @@ class Tecana:
 
         return df
 
-    def kst_m(self, df, bz=50, sz=50):
+    def kst_m(self, df: pd.DataFrame, bz: float = 50, sz: float = 50) -> pd.DataFrame:
         """
         Know Sure Thing Momentum Signal
 
@@ -2578,7 +3197,7 @@ class Tecana:
 
         return df
 
-    def macd_m(self, df):
+    def macd_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Moving Average Convergence Divergence Momentum Signal
 
@@ -2601,7 +3220,7 @@ class Tecana:
 
         return df
 
-    def mae_m(self, df):
+    def mae_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Moving Average Envelope Momentum Signal
 
@@ -2624,7 +3243,7 @@ class Tecana:
 
         return df
 
-    def obv_m(self, df, r1=7, r2=21):
+    def obv_m(self, df: pd.DataFrame, r1: int = 7, r2: int = 21) -> pd.DataFrame:
         """
         On-Balance Volume Momentum Signal
 
@@ -2663,7 +3282,7 @@ class Tecana:
 
         return df.drop(['obvmacd', 'obvmacds'], axis=1)
 
-    def pp_m(self, df, p=14):
+    def pp_m(self, df: pd.DataFrame, p: int = 14) -> pd.DataFrame:
         """
         Pivot Points Momentum Signal
 
@@ -2697,7 +3316,7 @@ class Tecana:
 
         return df
 
-    def ppo_m(self, df):
+    def ppo_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Percentage Price Oscillator Momentum Signal
 
@@ -2720,7 +3339,7 @@ class Tecana:
 
         return df
 
-    def proc_m(self, df):
+    def proc_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Price Rate of Change Momentum Signal
 
@@ -2743,7 +3362,7 @@ class Tecana:
 
         return df
 
-    def psar_m(self, df):
+    def psar_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Parabolic SAR Momentum Signal
 
@@ -2766,7 +3385,7 @@ class Tecana:
 
         return df
 
-    def pvo_m(self, df):
+    def pvo_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Percentage Volume Oscillator Momentum Signal
 
@@ -2789,7 +3408,7 @@ class Tecana:
 
         return df
 
-    def roc_m(self, df):
+    def roc_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Rate of Change Momentum Signal
 
@@ -2812,7 +3431,7 @@ class Tecana:
 
         return df
 
-    def rsi_m(self, df, bz=30, sz=70):
+    def rsi_m(self, df: pd.DataFrame, bz: float = 30, sz: float = 70) -> pd.DataFrame:
         """
         Relative Strength Index Momentum Signal
 
@@ -2837,7 +3456,7 @@ class Tecana:
 
         return df
 
-    def sma_m(self, df):
+    def sma_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Simple Moving Average Momentum Signal
 
@@ -2860,7 +3479,7 @@ class Tecana:
 
         return df
 
-    def so_m(self, df):
+    def so_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Stochastic Oscillator Momentum Signal
 
@@ -2883,7 +3502,7 @@ class Tecana:
 
         return df
 
-    def srsi_m(self, df):
+    def srsi_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Stochastic RSI Momentum Signal
 
@@ -2906,7 +3525,7 @@ class Tecana:
 
         return df
 
-    def stc_m(self, df, bz=25, sz=75):
+    def stc_m(self, df: pd.DataFrame, bz: float = 25, sz: float = 75) -> pd.DataFrame:
         """
         Schaff Trend Cycle Momentum Signal
 
@@ -2931,7 +3550,7 @@ class Tecana:
 
         return df
 
-    def tmo_m(self, df, bz=20, sz=20):
+    def tmo_m(self, df: pd.DataFrame, bz: float = 20, sz: float = 20) -> pd.DataFrame:
         """
         Twiggs Momentum Oscillator Momentum Signal
 
@@ -2956,7 +3575,7 @@ class Tecana:
 
         return df
 
-    def trix_m(self, df):
+    def trix_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Triple Exponential Moving Average Momentum Signal
 
@@ -2979,7 +3598,7 @@ class Tecana:
 
         return df
 
-    def tsi_m(self, df):
+    def tsi_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         True Strength Index Momentum Signal
 
@@ -3002,7 +3621,7 @@ class Tecana:
 
         return df
 
-    def uo_m(self, df, r1=3):
+    def uo_m(self, df: pd.DataFrame, r1: int = 3) -> pd.DataFrame:
         """
         Ultimate Oscillator Momentum Signal
 
@@ -3029,7 +3648,7 @@ class Tecana:
 
         return df.drop(['uos'], axis=1)
 
-    def vi_m(self, df):
+    def vi_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Vortex Indicator Momentum Signal
 
@@ -3052,7 +3671,7 @@ class Tecana:
 
         return df
 
-    def vpt_m(self, df):
+    def vpt_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Volume Price Trend Momentum Signal
 
@@ -3074,7 +3693,7 @@ class Tecana:
 
         return df
 
-    def vs_m(self, df):
+    def vs_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Volatility Stops Momentum Signal
 
@@ -3097,7 +3716,7 @@ class Tecana:
 
         return df
 
-    def wma_m(self, df):
+    def wma_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Weighted Moving Average Momentum Signal
 
@@ -3120,7 +3739,7 @@ class Tecana:
 
         return df
 
-    def null_m(self, df):
+    def null_m(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Null Momentum Signal
 
@@ -3139,9 +3758,191 @@ class Tecana:
 
         return df
 
+    # ── TA-Lib Expansion: Momentum Signals ─────────────────────────────
+
+    def dema_m(self, df: pd.DataFrame, fast: int = 10, slow: int = 20) -> pd.DataFrame:
+        """DEMA momentum signal from fast/slow DEMA crossovers.
+
+        Adds columns
+        ------------
+        ``dema_m`` : int8 signal. Signal: -1 (buy) on bullish crossover, +1 (sell) on bearish crossover.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        dema_f = df["close"].ewm(span=fast, min_periods=fast, adjust=False).mean()
+        ef2 = dema_f.ewm(span=fast, min_periods=fast, adjust=False).mean()
+        fast_dema = 2 * dema_f - ef2
+        dema_s = df["close"].ewm(span=slow, min_periods=slow, adjust=False).mean()
+        es2 = dema_s.ewm(span=slow, min_periods=slow, adjust=False).mean()
+        slow_dema = 2 * dema_s - es2
+        prev_fast = fast_dema.shift(1)
+        prev_slow = slow_dema.shift(1)
+        df.loc[(prev_fast <= prev_slow) & (fast_dema > slow_dema), "dema_m"] = -1
+        df.loc[(prev_fast >= prev_slow) & (fast_dema < slow_dema), "dema_m"] = 1
+        return self._finalize_signal(df, "dema_m")
+
+    def tema_m(self, df: pd.DataFrame, fast: int = 10, slow: int = 20) -> pd.DataFrame:
+        """TEMA momentum signal from fast/slow TEMA crossovers.
+
+        Adds columns
+        ------------
+        ``tema_m`` : int8 signal. Signal: -1 (buy) on bullish crossover, +1 (sell) on bearish crossover.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        def _tema(series, w):
+            e1 = series.ewm(span=w, min_periods=w, adjust=False).mean()
+            e2 = e1.ewm(span=w, min_periods=w, adjust=False).mean()
+            e3 = e2.ewm(span=w, min_periods=w, adjust=False).mean()
+            return 3 * e1 - 3 * e2 + e3
+        fast_tema = _tema(df["close"], fast)
+        slow_tema = _tema(df["close"], slow)
+        prev_f = fast_tema.shift(1)
+        prev_s = slow_tema.shift(1)
+        df.loc[(prev_f <= prev_s) & (fast_tema > slow_tema), "tema_m"] = -1
+        df.loc[(prev_f >= prev_s) & (fast_tema < slow_tema), "tema_m"] = 1
+        return self._finalize_signal(df, "tema_m")
+
+    def t3_m(self, df: pd.DataFrame) -> pd.DataFrame:
+        """T3 momentum signal from slope direction change.
+
+        Adds columns
+        ------------
+        ``t3_m`` : int8 signal. Signal: -1 (buy) when slope turns positive, +1 (sell) when slope turns negative.
+        """
+        df = self.t3(df)
+        slope = df["t3"] - df["t3"].shift(1)
+        prev_slope = slope.shift(1)
+        df.loc[(prev_slope <= 0) & (slope > 0), "t3_m"] = -1
+        df.loc[(prev_slope >= 0) & (slope < 0), "t3_m"] = 1
+        return self._finalize_signal(df, "t3_m")
+
+    def trima_m(self, df: pd.DataFrame, fast: int = 10, slow: int = 20) -> pd.DataFrame:
+        """TRIMA momentum signal from fast/slow TRIMA crossovers.
+
+        Adds columns
+        ------------
+        ``trima_m`` : int8 signal. Signal: -1 (buy) on bullish crossover, +1 (sell) on bearish crossover.
+        """
+        df = self._prepare_df(df, required_cols=["close"])
+        half_f = (fast + 1) // 2
+        sma1_f = df["close"].rolling(window=half_f).mean()
+        fast_trima = sma1_f.rolling(window=half_f).mean()
+        half_s = (slow + 1) // 2
+        sma1_s = df["close"].rolling(window=half_s).mean()
+        slow_trima = sma1_s.rolling(window=half_s).mean()
+        prev_f = fast_trima.shift(1)
+        prev_s = slow_trima.shift(1)
+        df.loc[(prev_f <= prev_s) & (fast_trima > slow_trima), "trima_m"] = -1
+        df.loc[(prev_f >= prev_s) & (fast_trima < slow_trima), "trima_m"] = 1
+        return self._finalize_signal(df, "trima_m")
+
+    def mom_m(self, df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+        """Momentum zero-cross signal.
+
+        Adds columns
+        ------------
+        ``mom_m`` : int8 signal. Signal: -1 (buy) when momentum crosses above zero, +1 (sell) when below.
+        """
+        df = self.mom(df, window=window)
+        prev = df["mom"].shift(1)
+        df.loc[(prev <= 0) & (df["mom"] > 0), "mom_m"] = -1
+        df.loc[(prev >= 0) & (df["mom"] < 0), "mom_m"] = 1
+        return self._finalize_signal(df, "mom_m")
+
+    def apo_m(self, df: pd.DataFrame, fast: int = 12, slow: int = 26) -> pd.DataFrame:
+        """APO zero-cross signal.
+
+        Adds columns
+        ------------
+        ``apo_m`` : int8 signal. Signal: -1 (buy) when APO crosses above zero, +1 (sell) when below.
+        """
+        df = self.apo(df, fast=fast, slow=slow)
+        prev = df["apo"].shift(1)
+        df.loc[(prev <= 0) & (df["apo"] > 0), "apo_m"] = -1
+        df.loc[(prev >= 0) & (df["apo"] < 0), "apo_m"] = 1
+        return self._finalize_signal(df, "apo_m")
+
+    def bop_m(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Balance of Power zero-cross signal.
+
+        Adds columns
+        ------------
+        ``bop_m`` : int8 signal. Signal: -1 (buy) when BOP crosses above zero, +1 (sell) when below.
+        """
+        df = self.bop(df)
+        prev = df["bop"].shift(1)
+        df.loc[(prev <= 0) & (df["bop"] > 0), "bop_m"] = -1
+        df.loc[(prev >= 0) & (df["bop"] < 0), "bop_m"] = 1
+        return self._finalize_signal(df, "bop_m")
+
+    def adosc_m(self, df: pd.DataFrame, fast: int = 3, slow: int = 10) -> pd.DataFrame:
+        """Chaikin A/D Oscillator zero-cross signal.
+
+        Adds columns
+        ------------
+        ``adosc_m`` : int8 signal. Signal: -1 (buy) when ADOSC crosses above zero, +1 (sell) when below.
+        """
+        df = self.adosc(df, fast=fast, slow=slow)
+        prev = df["adosc"].shift(1)
+        df.loc[(prev <= 0) & (df["adosc"] > 0), "adosc_m"] = -1
+        df.loc[(prev >= 0) & (df["adosc"] < 0), "adosc_m"] = 1
+        return self._finalize_signal(df, "adosc_m")
+
+    def sof_m(self, df: pd.DataFrame, window: int = 14, smooth: int = 3) -> pd.DataFrame:
+        """Fast Stochastic %K/%D crossover signal.
+
+        Adds columns
+        ------------
+        ``sof_m`` : int8 signal. Signal: -1 (buy) when %%K crosses above %%D, +1 (sell) when below.
+        """
+        df = self.sof(df, window=window, smooth=smooth)
+        prev_k = df["sofk"].shift(1)
+        prev_d = df["sofd"].shift(1)
+        df.loc[(prev_k <= prev_d) & (df["sofk"] > df["sofd"]), "sof_m"] = -1
+        df.loc[(prev_k >= prev_d) & (df["sofk"] < df["sofd"]), "sof_m"] = 1
+        return self._finalize_signal(df, "sof_m")
+
+    def aiosc_m(self, df: pd.DataFrame, window: int = 25) -> pd.DataFrame:
+        """Aroon Oscillator zero-cross signal.
+
+        Adds columns
+        ------------
+        ``aiosc_m`` : int8 signal. Signal: -1 (buy) when oscillator crosses above zero, +1 (sell) when below.
+        """
+        df = self.aiosc(df, window=window)
+        prev = df["aiosc"].shift(1)
+        df.loc[(prev <= 0) & (df["aiosc"] > 0), "aiosc_m"] = -1
+        df.loc[(prev >= 0) & (df["aiosc"] < 0), "aiosc_m"] = 1
+        return self._finalize_signal(df, "aiosc_m")
+
+    def lrs_m(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Linear Regression Slope sign-change signal.
+
+        Adds columns
+        ------------
+        ``lrs_m`` : int8 signal. Signal: -1 (buy) when slope turns positive, +1 (sell) when negative.
+        """
+        df = self.lrs(df, window=window)
+        prev = df["lrs"].shift(1)
+        df.loc[(prev <= 0) & (df["lrs"] > 0), "lrs_m"] = -1
+        df.loc[(prev >= 0) & (df["lrs"] < 0), "lrs_m"] = 1
+        return self._finalize_signal(df, "lrs_m")
+
+    def rocp_m(self, df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+        """ROCP zero-cross signal.
+
+        Adds columns
+        ------------
+        ``rocp_m`` : int8 signal. Signal: -1 (buy) when ROCP crosses above zero, +1 (sell) when below.
+        """
+        df = self.rocp(df, window=window)
+        prev = df["rocp"].shift(1)
+        df.loc[(prev <= 0) & (df["rocp"] > 0), "rocp_m"] = -1
+        df.loc[(prev >= 0) & (df["rocp"] < 0), "rocp_m"] = 1
+        return self._finalize_signal(df, "rocp_m")
+
     # Zone Signals
 
-    def bb_z(self, df):
+    def bb_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Bollinger Bands Zone Signal
 
@@ -3164,7 +3965,7 @@ class Tecana:
 
         return df
 
-    def cc_z(self, df):
+    def cc_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Coppock Curve Zone Signal
 
@@ -3186,7 +3987,7 @@ class Tecana:
 
         return df
 
-    def cci_z(self, df, bz=100, sz=100):
+    def cci_z(self, df: pd.DataFrame, bz: float = 100, sz: float = 100) -> pd.DataFrame:
         """
         Commodity Channel Index Zone Signal
 
@@ -3210,7 +4011,7 @@ class Tecana:
 
         return df
 
-    def dc_z(self, df, m=2):
+    def dc_z(self, df: pd.DataFrame, m: int = 2) -> pd.DataFrame:
         """
         Donchian Channel Zone Signal
 
@@ -3234,7 +4035,7 @@ class Tecana:
 
         return df
 
-    def di_z(self, df):
+    def di_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Disparity Index Zone Signal
 
@@ -3256,7 +4057,7 @@ class Tecana:
 
         return df
 
-    def dpo_z(self, df, qs=0.85, qb=-0.85):
+    def dpo_z(self, df: pd.DataFrame, qs: float = 0.85, qb: float = -0.85) -> pd.DataFrame:
         """
         Detrended Price Oscillator Zone Signal
 
@@ -3285,7 +4086,7 @@ class Tecana:
 
         return df.drop(['dpon', 'dpop'], axis=1)
 
-    def dx_z(self, df, q=35):
+    def dx_z(self, df: pd.DataFrame, q: int = 35) -> pd.DataFrame:
         """
         Directional Movement Index Zone Signal
 
@@ -3309,7 +4110,7 @@ class Tecana:
 
         return df
 
-    def ema_z(self, df):
+    def ema_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Exponential Moving Average Zone Signal
 
@@ -3331,7 +4132,7 @@ class Tecana:
 
         return df
 
-    def eom_z(self, df, qb=-13000, qs=13000):
+    def eom_z(self, df: pd.DataFrame, qb: float = -13000, qs: float = 13000) -> pd.DataFrame:
         """
         Ease of Movement Zone Signal
 
@@ -3355,7 +4156,7 @@ class Tecana:
 
         return df
 
-    def fi_z(self, df, qb=-1500, qs=1500):
+    def fi_z(self, df: pd.DataFrame, qb: float = -1500, qs: float = 1500) -> pd.DataFrame:
         """
         Force Index Zone Signal
 
@@ -3379,7 +4180,7 @@ class Tecana:
 
         return df
 
-    def fr_z(self, df, p=14):
+    def fr_z(self, df: pd.DataFrame, p: int = 14) -> pd.DataFrame:
         """
         Fibonacci Retracement Zone Signal
 
@@ -3416,7 +4217,7 @@ class Tecana:
 
         return df
 
-    def ic_z(self, df):
+    def ic_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ichimoku Cloud Zone Signal
 
@@ -3439,7 +4240,7 @@ class Tecana:
 
         return df
 
-    def kama_z(self, df, qb=500, qs=3500):
+    def kama_z(self, df: pd.DataFrame, qb: float = 500, qs: float = 3500) -> pd.DataFrame:
         """
         Kaufman's Adaptive Moving Average Zone Signal
 
@@ -3468,7 +4269,7 @@ class Tecana:
 
         return df.drop(['kaman'], axis=1)
 
-    def kc_z(self, df, bz=0.5, sz=0.5):
+    def kc_z(self, df: pd.DataFrame, bz: float = 0.5, sz: float = 0.5) -> pd.DataFrame:
         """
         Keltner Channel Zone Signal
 
@@ -3493,7 +4294,7 @@ class Tecana:
 
         return df
 
-    def mae_z(self, df):
+    def mae_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Moving Average Envelope Zone Signal
 
@@ -3516,7 +4317,7 @@ class Tecana:
 
         return df
 
-    def mfi_z(self, df, bz=20, sz=80):
+    def mfi_z(self, df: pd.DataFrame, bz: float = 20, sz: float = 80) -> pd.DataFrame:
         """
         Money Flow Index Zone Signal
 
@@ -3540,7 +4341,7 @@ class Tecana:
 
         return df
 
-    def pp_z(self, df):
+    def pp_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Pivot Points Zone Signal
 
@@ -3563,7 +4364,7 @@ class Tecana:
 
         return df
 
-    def proc_z(self, df):
+    def proc_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Price Rate of Change Zone Signal
 
@@ -3585,7 +4386,7 @@ class Tecana:
 
         return df
 
-    def roc_z(self, df, qb=-0.2, qs=0.2):
+    def roc_z(self, df: pd.DataFrame, qb: float = -0.2, qs: float = 0.2) -> pd.DataFrame:
         """
         Rate of Change Zone Signal
 
@@ -3609,7 +4410,7 @@ class Tecana:
 
         return df
 
-    def rsi_z(self, df, bz=30, sz=70):
+    def rsi_z(self, df: pd.DataFrame, bz: float = 30, sz: float = 70) -> pd.DataFrame:
         """
         Relative Strength Index Zone Signal
 
@@ -3633,14 +4434,13 @@ class Tecana:
 
         return df
 
-    def sma_z(self, df):
+    def sma_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Simple Moving Average Zone Signal
 
         Identifies price zones relative to the SMA.
-        Signal: 1 (bullish zone) when price > SMA,
-        -1 (bearish zone) when price < SMA.
-
+        Signal: 1 (sell zone) when price > SMA,
+        -1 (buy zone) when price < SMA.
         Parameters:
         - df (DataFrame): Input data with SMA indicator or price data.
 
@@ -3656,7 +4456,7 @@ class Tecana:
 
         return df
 
-    def so_z(self, df, bz=30, sz=70):
+    def so_z(self, df: pd.DataFrame, bz: float = 30, sz: float = 70) -> pd.DataFrame:
         """
         Stochastic Oscillator Zone Signal
 
@@ -3680,7 +4480,7 @@ class Tecana:
 
         return df
 
-    def srsi_z(self, df, bz=20, sz=80):
+    def srsi_z(self, df: pd.DataFrame, bz: float = 20, sz: float = 80) -> pd.DataFrame:
         """
         Stochastic RSI Zone Signal
 
@@ -3704,7 +4504,7 @@ class Tecana:
 
         return df
 
-    def stc_z(self, df, bz=25, sz=75):
+    def stc_z(self, df: pd.DataFrame, bz: float = 25, sz: float = 75) -> pd.DataFrame:
         """
         Schaff Trend Cycle Zone Signal
 
@@ -3728,7 +4528,7 @@ class Tecana:
 
         return df
 
-    def sz_z(self, df):
+    def sz_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Safe Zone Indicator Zone Signal
 
@@ -3751,7 +4551,7 @@ class Tecana:
 
         return df
 
-    def tmo_z(self, df, bz=20, sz=20):
+    def tmo_z(self, df: pd.DataFrame, bz: float = 20, sz: float = 20) -> pd.DataFrame:
         """
         Twiggs Momentum Oscillator Zone Signal
 
@@ -3776,7 +4576,7 @@ class Tecana:
 
         return df
 
-    def tsi_z(self, df, qb=6, qs=190):
+    def tsi_z(self, df: pd.DataFrame, qb: float = 6, qs: float = 190) -> pd.DataFrame:
         """
         True Strength Index Zone Signal
 
@@ -3800,7 +4600,7 @@ class Tecana:
 
         return df
 
-    def tv_z(self, df, qb=24, qs=4):
+    def tv_z(self, df: pd.DataFrame, qb: float = 24, qs: float = 4) -> pd.DataFrame:
         """
         Twiggs Volatility Zone Signal
 
@@ -3825,7 +4625,7 @@ class Tecana:
 
         return df
 
-    def uo_z(self, df, bz=30, sz=70):
+    def uo_z(self, df: pd.DataFrame, bz: float = 30, sz: float = 70) -> pd.DataFrame:
         """
         Ultimate Oscillator Zone Signal
 
@@ -3849,7 +4649,7 @@ class Tecana:
 
         return df
 
-    def vs_z(self, df):
+    def vs_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Volatility Stops Zone Signal
 
@@ -3872,7 +4672,7 @@ class Tecana:
 
         return df
 
-    def wad_z(self, df):
+    def wad_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Williams Accumulation/Distribution Zone Signal
 
@@ -3895,7 +4695,7 @@ class Tecana:
 
         return df
 
-    def wma_z(self, df):
+    def wma_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Weighted Moving Average Zone Signal
 
@@ -3918,7 +4718,7 @@ class Tecana:
 
         return df
 
-    def wr_z(self, df, bz=80, sz=20):
+    def wr_z(self, df: pd.DataFrame, bz: float = 80, sz: float = 20) -> pd.DataFrame:
         """
         Williams %R Zone Signal
 
@@ -3942,7 +4742,7 @@ class Tecana:
 
         return df
 
-    def null_z(self, df):
+    def null_z(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Null Zone Signal
 
@@ -3961,9 +4761,73 @@ class Tecana:
 
         return df
 
+    # ── TA-Lib Expansion: Zone Signals ─────────────────────────────────
+
+    def mom_z(self, df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+        """Momentum zone signal (sign of momentum).
+
+        Adds columns
+        ------------
+        ``mom_z`` : int8 signal. Signal: -1 (buy zone) when momentum > 0, +1 (sell zone) when < 0.
+        """
+        df = self.mom(df, window=window)
+        df.loc[df["mom"] > 0, "mom_z"] = -1
+        df.loc[df["mom"] < 0, "mom_z"] = 1
+        return self._finalize_signal(df, "mom_z")
+
+    def bop_z(self, df: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
+        """Balance of Power zone signal (strong buy/sell pressure).
+
+        Adds columns
+        ------------
+        ``bop_z`` : int8 signal. Signal: -1 (buy zone) above threshold, +1 (sell zone) below -threshold.
+        """
+        df = self.bop(df)
+        df.loc[df["bop"] > threshold, "bop_z"] = -1
+        df.loc[df["bop"] < -threshold, "bop_z"] = 1
+        return self._finalize_signal(df, "bop_z")
+
+    def sof_z(self, df: pd.DataFrame, window: int = 14, bz: float = 20, sz: float = 80) -> pd.DataFrame:
+        """Fast Stochastic zone signal (oversold/overbought).
+
+        Adds columns
+        ------------
+        ``sof_z`` : int8 signal. Signal: -1 (buy) exiting oversold, +1 (sell) exiting overbought.
+        """
+        df = self.sof(df, window=window)
+        prev = df["sofk"].shift(1)
+        df.loc[(prev <= bz) & (df["sofk"] > bz), "sof_z"] = -1
+        df.loc[(prev >= sz) & (df["sofk"] < sz), "sof_z"] = 1
+        return self._finalize_signal(df, "sof_z")
+
+    def imi_z(self, df: pd.DataFrame, window: int = 14, bz: float = 30, sz: float = 70) -> pd.DataFrame:
+        """IMI zone signal (oversold/overbought).
+
+        Adds columns
+        ------------
+        ``imi_z`` : int8 signal. Signal: -1 (buy) exiting oversold, +1 (sell) exiting overbought.
+        """
+        df = self.imi(df, window=window)
+        prev = df["imi"].shift(1)
+        df.loc[(prev <= bz) & (df["imi"] > bz), "imi_z"] = -1
+        df.loc[(prev >= sz) & (df["imi"] < sz), "imi_z"] = 1
+        return self._finalize_signal(df, "imi_z")
+
+    def accb_z(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Acceleration Bands breakout signal.
+
+        Adds columns
+        ------------
+        ``accb_z`` : int8 signal. Signal: -1 (buy) on upper band breakout, +1 (sell) on lower band breakout.
+        """
+        df = self.accb(df, window=window)
+        df.loc[df["close"] > df["accbu"], "accb_z"] = -1
+        df.loc[df["close"] < df["accbl"], "accb_z"] = 1
+        return self._finalize_signal(df, "accb_z")
+
     # Trend Signals
 
-    def adi_t(self, df, window=14):
+    def adi_t(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
         """
         Accumulation/Distribution Index (ADI) Trading Signal
 
@@ -3989,7 +4853,7 @@ class Tecana:
         df.loc[(df['adim'].shift(1) < df['adim']), 'adi_t'] = -1
         return df.drop(['adim'], axis=1)
 
-    def ai_t(self, df):
+    def ai_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Aroon Indicator Trading Signal
 
@@ -4013,7 +4877,7 @@ class Tecana:
         df.loc[(df['close'] > df['aiu']), 'ai_t'] = -1
         return df
 
-    def atr_t(self, df, divisor=3):
+    def atr_t(self, df: pd.DataFrame, divisor: int = 3) -> pd.DataFrame:
         """
         Average True Range (ATR) Trading Signal
 
@@ -4039,7 +4903,7 @@ class Tecana:
         df.loc[(df['close'] > df['close'].shift(1) + df['atr'].shift(1) / divisor), 'atr_t'] = -1
         return df
 
-    def awo_t(self, df):
+    def awo_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Awesome Oscillator Trading Signal
 
@@ -4062,7 +4926,7 @@ class Tecana:
         df.loc[(df['awo'] >= 0), 'awo_t'] = -1
         return df
 
-    def bb_t(self, df, period=14):
+    def bb_t(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Bollinger Bands Trading Signal
 
@@ -4092,7 +4956,7 @@ class Tecana:
             df = df.drop(['adx', 'dip', 'din'], axis=1)
         return df
 
-    def cmf_t(self, df):
+    def cmf_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Chaikin Money Flow Trading Signal
 
@@ -4115,7 +4979,7 @@ class Tecana:
         df.loc[(df['cmf'] <= 0), 'cmf_t'] = -1
         return df
 
-    def cmo_t(self, df):
+    def cmo_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Chande Momentum Oscillator Trading Signal
 
@@ -4138,7 +5002,7 @@ class Tecana:
         df.loc[(df['cmo'] >= 0), 'cmo_t'] = -1
         return df
 
-    def dc_t(self, df, period=14):
+    def dc_t(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Donchian Channel Trading Signal
 
@@ -4168,7 +5032,7 @@ class Tecana:
             df = df.drop(['adx', 'dip', 'din'], axis=1)
         return df
 
-    def dma_t(self, df):
+    def dma_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Dickson Moving Average Trading Signal
 
@@ -4191,7 +5055,7 @@ class Tecana:
         df.loc[(df['close'] >= df['dma']), 'dma_t'] = -1
         return df
 
-    def dx_t(self, df):
+    def dx_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Directional Movement Index Trading Signal
 
@@ -4214,7 +5078,7 @@ class Tecana:
         df.loc[(df['dip'] >= df['din']), 'dx_t'] = -1
         return df
 
-    def eom_t(self, df):
+    def eom_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ease of Movement Trading Signal
 
@@ -4237,7 +5101,7 @@ class Tecana:
         df.loc[(df['eom'] >= 0), 'eom_t'] = -1
         return df
 
-    def eri_t(self, df):
+    def eri_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Elder Ray Index Trading Signal
 
@@ -4261,7 +5125,7 @@ class Tecana:
         df.loc[(df['erbup'] > 0) & (df['erbep'] < 0), 'eri_t'] = -1
         return df
 
-    def fi_t(self, df):
+    def fi_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Force Index Trading Signal
 
@@ -4284,7 +5148,7 @@ class Tecana:
         df.loc[df['fi'] <= 0, 'fi_t'] = -1
         return df
 
-    def ha_t(self, df):
+    def ha_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Heikin Ashi Trading Signal
 
@@ -4308,7 +5172,7 @@ class Tecana:
         df.loc[(df['hac'] >= df['hao']), 'ha_t'] = -1
         return df
 
-    def ic_t(self, df):
+    def ic_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Ichimoku Cloud Trading Signal
 
@@ -4331,7 +5195,7 @@ class Tecana:
         df.loc[(df['close'] > df['ick']), 'ic_t'] = -1
         return df
 
-    def kama_t(self, df, window=3):
+    def kama_t(self, df: pd.DataFrame, window: int = 3) -> pd.DataFrame:
         """
         Kaufman Adaptive Moving Average Trading Signal
 
@@ -4357,7 +5221,7 @@ class Tecana:
         df.loc[df['kamas'] < df['kamas'].shift(1), 'kama_t'] = -1
         return df.drop(['kamas'], axis=1)
 
-    def kc_t(self, df):
+    def kc_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Keltner Channel Trading Signal
 
@@ -4380,7 +5244,7 @@ class Tecana:
         df.loc[df['close'] >= df['kcm'], 'kc_t'] = -1
         return df
 
-    def kst_t(self, df):
+    def kst_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Know Sure Thing Trading Signal
 
@@ -4403,7 +5267,7 @@ class Tecana:
         df.loc[df['ksth'] < 0, 'kst_t'] = 1
         return df
 
-    def lr_t(self, df):
+    def lr_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Linear Regression Trading Signal
 
@@ -4426,7 +5290,7 @@ class Tecana:
         df.loc[(df['close'] >= df['lr']), 'lr_t'] = -1
         return df
 
-    def macd_t(self, df):
+    def macd_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         MACD Trading Signal
 
@@ -4449,7 +5313,7 @@ class Tecana:
         df.loc[(df['macdh'] >= 0), 'macd_t'] = -1
         return df
 
-    def mfi_t(self, df):
+    def mfi_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Money Flow Index Trading Signal
 
@@ -4472,7 +5336,7 @@ class Tecana:
         df.loc[(df['mfi'] >= 0), 'mfi_t'] = -1
         return df
 
-    def nvi_t(self, df):
+    def nvi_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Negative Volume Index Trading Signal
 
@@ -4497,7 +5361,7 @@ class Tecana:
         df.loc[(df['nvi'] > df['nvis']), 'nvi_t'] = -1
         return df
 
-    def obv_t(self, df, r1=7, r2=21):
+    def obv_t(self, df: pd.DataFrame, r1: int = 7, r2: int = 21) -> pd.DataFrame:
         """
         On Balance Volume Trading Signal
 
@@ -4534,7 +5398,7 @@ class Tecana:
             df = df.drop(['adi'], axis=1)
         return df.drop(['obvmacd', 'obvmacds'], axis=1)
 
-    def pc_t(self, df):
+    def pc_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Price Channel Trading Signal
 
@@ -4557,7 +5421,7 @@ class Tecana:
         df.loc[df['pc'] < 0, 'pc_t'] = 1
         return df
 
-    def ppo_t(self, df):
+    def ppo_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Percentage Price Oscillator Trading Signal
 
@@ -4580,7 +5444,7 @@ class Tecana:
         df.loc[(df['ppoh'] >= 0), 'ppo_t'] = -1
         return df
 
-    def psar_t(self, df):
+    def psar_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Parabolic SAR Trading Signal
 
@@ -4603,7 +5467,7 @@ class Tecana:
         df.loc[(df['close'] >= df['psar']), 'psar_t'] = -1
         return df
 
-    def pvo_t(self, df):
+    def pvo_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Percentage Volume Oscillator Trading Signal
 
@@ -4626,7 +5490,7 @@ class Tecana:
         df.loc[(df['pvoh'] >= 0), 'pvo_t'] = -1
         return df
 
-    def roc_t(self, df):
+    def roc_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Rate of Change Trading Signal
 
@@ -4649,7 +5513,7 @@ class Tecana:
         df.loc[(df['roc'] >= 0), 'roc_t'] = -1
         return df
 
-    def so_t(self, df, period=14):
+    def so_t(self, df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
         """
         Stochastic Oscillator Trading Signal
 
@@ -4676,7 +5540,7 @@ class Tecana:
                (df['sok'].rolling(window=period).min() < df['sok'].rolling(window=period).min().shift(1)), 'so_t'] = 1
         return df
 
-    def sroc_t(self, df):
+    def sroc_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Smoothed Rate of Change Trading Signal
 
@@ -4699,7 +5563,7 @@ class Tecana:
         df.loc[(df['sroc'] >= 0), 'sroc_t'] = -1
         return df
 
-    def tmf_t(self, df):
+    def tmf_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Twiggs Money Flow Trading Signal
 
@@ -4722,7 +5586,7 @@ class Tecana:
         df.loc[(df['tmf'] >= 0), 'tmf_t'] = -1
         return df
 
-    def trix_t(self, df):
+    def trix_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         TRIX Trading Signal
 
@@ -4745,7 +5609,7 @@ class Tecana:
         df.loc[df['trix'] >= 0, 'trix_t'] = -1
         return df
 
-    def tsi_t(self, df):
+    def tsi_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         True Strength Index Trading Signal
 
@@ -4768,7 +5632,7 @@ class Tecana:
         df.loc[(df['tsi'] >= 0), 'tsi_t'] = -1
         return df
 
-    def tti_t(self, df):
+    def tti_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Trend Tracking Index Trading Signal
 
@@ -4791,7 +5655,7 @@ class Tecana:
         df.loc[(df['tti'] >= 0), 'tti_t'] = -1
         return df
 
-    def uo_t(self, df, window=3):
+    def uo_t(self, df: pd.DataFrame, window: int = 3) -> pd.DataFrame:
         """
         Ultimate Oscillator Trading Signal
 
@@ -4817,7 +5681,7 @@ class Tecana:
         df.loc[(df['uo'] < 50) & (df['uos'].shift(1) > df['uos']), 'uo_t'] = 1
         return df.drop(['uos'], axis=1)
 
-    def vi_t(self, df):
+    def vi_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Vortex Indicator Trading Signal
 
@@ -4840,7 +5704,7 @@ class Tecana:
         df.loc[(df['vip'] >= df['vin']), 'vi_t'] = -1
         return df
 
-    def vpt_t(self, df):
+    def vpt_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Volume Price Trend Trading Signal
 
@@ -4863,7 +5727,7 @@ class Tecana:
         df.loc[df['vpts'] >= df['vptl'], 'vpt_t'] = -1
         return df
 
-    def vroc_t(self, df):
+    def vroc_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Volume Rate of Change Trading Signal
 
@@ -4886,7 +5750,7 @@ class Tecana:
         df.loc[(df['vroc'] >= 0), 'vroc_t'] = -1
         return df
 
-    def vwap_t(self, df):
+    def vwap_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Volume Weighted Average Price Trading Signal
 
@@ -4909,7 +5773,7 @@ class Tecana:
         df.loc[(df['close'] >= df['vwap']), 'vwap_t'] = -1
         return df
 
-    def wr_t(self, df):
+    def wr_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Williams %R Trading Signal
 
@@ -4932,7 +5796,7 @@ class Tecana:
         df.loc[df['wr'].diff() <= 0, 'wr_t'] = 1  # Downtrend
         return df
 
-    def null_t(self, df):
+    def null_t(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Null Trading Signal
 
@@ -4955,7 +5819,94 @@ class Tecana:
         df['null_t'] = 0
         return df
 
-    def atr_v(self, df, threshold=1.35):
+
+    # ── TA-Lib Expansion: Trend Signals ────────────────────────────────
+
+    def dema_t(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """DEMA trend signal: price above/below DEMA.
+
+        Adds columns
+        ------------
+        ``dema_t`` : int8 signal. Signal: -1 (buy) when price above DEMA, +1 (sell) when below.
+        """
+        df = self.dema(df, window=window)
+        df.loc[df["close"] > df["dema"], "dema_t"] = -1
+        df.loc[df["close"] < df["dema"], "dema_t"] = 1
+        return self._finalize_signal(df, "dema_t")
+
+    def tema_t(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """TEMA trend signal: price above/below TEMA.
+
+        Adds columns
+        ------------
+        ``tema_t`` : int8 signal. Signal: -1 (buy) when price above TEMA, +1 (sell) when below.
+        """
+        df = self.tema(df, window=window)
+        df.loc[df["close"] > df["tema"], "tema_t"] = -1
+        df.loc[df["close"] < df["tema"], "tema_t"] = 1
+        return self._finalize_signal(df, "tema_t")
+
+    def t3_t(self, df: pd.DataFrame) -> pd.DataFrame:
+        """T3 trend signal: price above/below T3.
+
+        Adds columns
+        ------------
+        ``t3_t`` : int8 signal. Signal: -1 (buy) when price above T3, +1 (sell) when below.
+        """
+        df = self.t3(df)
+        df.loc[df["close"] > df["t3"], "t3_t"] = -1
+        df.loc[df["close"] < df["t3"], "t3_t"] = 1
+        return self._finalize_signal(df, "t3_t")
+
+    def trima_t(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """TRIMA trend signal: price above/below TRIMA.
+
+        Adds columns
+        ------------
+        ``trima_t`` : int8 signal. Signal: -1 (buy) when price above TRIMA, +1 (sell) when below.
+        """
+        df = self.trima(df, window=window)
+        df.loc[df["close"] > df["trima"], "trima_t"] = -1
+        df.loc[df["close"] < df["trima"], "trima_t"] = 1
+        return self._finalize_signal(df, "trima_t")
+
+    def midpt_t(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Midpoint trend signal.
+
+        Adds columns
+        ------------
+        ``midpt_t`` : int8 signal. Signal: -1 (buy) when price above midpoint, +1 (sell) when below.
+        """
+        df = self.midpt(df, window=window)
+        df.loc[df["close"] > df["midpt"], "midpt_t"] = -1
+        df.loc[df["close"] < df["midpt"], "midpt_t"] = 1
+        return self._finalize_signal(df, "midpt_t")
+
+    def midpr_t(self, df: pd.DataFrame, window: int = 14) -> pd.DataFrame:
+        """Midprice trend signal.
+
+        Adds columns
+        ------------
+        ``midpr_t`` : int8 signal. Signal: -1 (buy) when price above midprice, +1 (sell) when below.
+        """
+        df = self.midpr(df, window=window)
+        df.loc[df["close"] > df["midpr"], "midpr_t"] = -1
+        df.loc[df["close"] < df["midpr"], "midpr_t"] = 1
+        return self._finalize_signal(df, "midpr_t")
+
+    def adxr_t(self, df: pd.DataFrame, window: int = 14, threshold: float = 25) -> pd.DataFrame:
+        """ADXR trend strength signal (trending when above threshold).
+
+        Adds columns
+        ------------
+        ``adxr_t`` : int8 signal. Signal: -1 (buy/trending) when ADXR above threshold, +1 (sell/ranging) when below.
+        """
+        df = self.adxr(df, window=window)
+        df.loc[df["adxr"] > threshold, "adxr_t"] = -1
+        df.loc[df["adxr"] <= threshold, "adxr_t"] = 1
+        return self._finalize_signal(df, "adxr_t")
+
+    def atr_v(self, df: pd.DataFrame, threshold: float = 1.35) -> pd.DataFrame:
         """
         ATR Volatility Signal
 
@@ -4979,7 +5930,7 @@ class Tecana:
         df.loc[df['atr'] > threshold, 'atr_v'] = 1
         return df
 
-    def bb_v(self, df, threshold=5):
+    def bb_v(self, df: pd.DataFrame, threshold: float = 5) -> pd.DataFrame:
         """
         Bollinger Band Volatility Signal
 
@@ -5003,7 +5954,7 @@ class Tecana:
         df.loc[(df['bbv'] > threshold), 'bb_v'] = 1
         return df
 
-    def ci1_v(self, df, threshold=50):
+    def ci1_v(self, df: pd.DataFrame, threshold: float = 50) -> pd.DataFrame:
         """
         Choppiness Index High Signal
 
@@ -5027,7 +5978,7 @@ class Tecana:
         df.loc[(df['ci'] > threshold), 'ci1_v'] = 1  # Choppy Market (High Volatility and No trend)
         return df
 
-    def ci2_v(self, df, threshold=50):
+    def ci2_v(self, df: pd.DataFrame, threshold: float = 50) -> pd.DataFrame:
         """
         Choppiness Index Low Signal
 
@@ -5051,7 +6002,7 @@ class Tecana:
         df.loc[(df['ci'] < threshold), 'ci2_v'] = 1  # Trendy Market
         return df
 
-    def ui_v(self, df, threshold=0.2):
+    def ui_v(self, df: pd.DataFrame, threshold: float = 0.2) -> pd.DataFrame:
         """
         Ulcer Index Volatility Signal
 
@@ -5075,7 +6026,7 @@ class Tecana:
         df.loc[(df['ui'] > threshold), 'ui_v'] = 1
         return df
 
-    def vhf1_v(self, df, threshold=0.45):
+    def vhf1_v(self, df: pd.DataFrame, threshold: float = 0.45) -> pd.DataFrame:
         """
         Vertical Horizontal Filter High Signal
 
@@ -5099,7 +6050,7 @@ class Tecana:
         df.loc[(df['vhf'] > threshold), 'vhf1_v'] = 1  # Trendy Market
         return df
 
-    def vhf2_v(self, df, threshold=0.3):
+    def vhf2_v(self, df: pd.DataFrame, threshold: float = 0.3) -> pd.DataFrame:
         """
         Vertical Horizontal Filter Low Signal
 
@@ -5123,7 +6074,7 @@ class Tecana:
         df.loc[(df['vhf'] < threshold), 'vhf2_v'] = 1  # Ranging Market (Fixed Volatility and No trend)
         return df
 
-    def vo_v(self, df, threshold=30):
+    def vo_v(self, df: pd.DataFrame, threshold: float = 30) -> pd.DataFrame:
         """
         Volatility Oscillator Signal
 
@@ -5147,7 +6098,7 @@ class Tecana:
         df.loc[(df['vo'] > threshold), 'vo_v'] = 1
         return df
 
-    def null_v(self, df):
+    def null_v(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Null Volatility Signal
 
@@ -5169,3 +6120,43 @@ class Tecana:
 
         df['null_v'] = 0
         return df
+
+    # ── TA-Lib Expansion: Volatility Signals ───────────────────────────
+
+    def natr_v(self, df: pd.DataFrame, window: int = 14, threshold: float = 1.5) -> pd.DataFrame:
+        """NATR volatility expansion flag.
+
+        Adds columns
+        ------------
+        ``natr_v`` : int8 flag {0, 1}. Flag: 1 when NATR exceeds 1.5x rolling median (high volatility), 0 otherwise.
+        """
+        df = self.natr(df, window=window)
+        median_natr = df["natr"].rolling(window=50, min_periods=10).median()
+        df.loc[df["natr"] > median_natr * threshold, "natr_v"] = 1
+        return self._finalize_signal(df, "natr_v")
+
+    def accb_v(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Acceleration Bands width volatility flag.
+
+        Adds columns
+        ------------
+        ``accb_v`` : int8 flag {0, 1}. Flag: 1 when band width exceeds 1.5x rolling median (high volatility), 0 otherwise.
+        """
+        df = self.accb(df, window=window)
+        width = self._safe_div(df["accbu"] - df["accbl"], df["accbm"]) * 100
+        median_w = width.rolling(window=50, min_periods=10).median()
+        df.loc[width > median_w * 1.5, "accb_v"] = 1
+        return self._finalize_signal(df, "accb_v")
+
+    def stdv_v(self, df: pd.DataFrame, window: int = 20) -> pd.DataFrame:
+        """Standard deviation volatility expansion flag.
+
+        Adds columns
+        ------------
+        ``stdv_v`` : int8 flag {0, 1}. Flag: 1 when std dev exceeds 1.5x rolling median (high volatility), 0 otherwise.
+        """
+        df = self.stdv(df, window=window)
+        median_std = df["stdv"].rolling(window=50, min_periods=10).median()
+        df.loc[df["stdv"] > median_std * 1.5, "stdv_v"] = 1
+        return self._finalize_signal(df, "stdv_v")
+

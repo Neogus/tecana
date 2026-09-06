@@ -4,45 +4,63 @@ A high-performance Python library for technical analysis of financial markets, o
 
 ## Features
 
-- 60+ technical indicators with optimized implementations
-- Trading signals derived from indicators (momentum, zone, trend, volatility)
+- **90+ technical indicators** with optimized vectorized implementations
+- **160+ trading signals** derived from indicators (momentum, zone, trend, volatility)
+- Full **type annotations** on all public methods
 - Simple, consistent API with pandas integration
 - Minimal dependencies (just numpy and pandas)
-- Comprehensive test coverage
+- Safe division (no ±inf from zero denominators)
 
 ## Installation
 
 ```bash
 pip install tecana
 ```
-Quick Start
-```
+
+## Quick Start
+
+```python
 import tecana as ta
 import pandas as pd
-```
-## Load your OHLCV data
-```
+
+# Load your OHLCV data
 df = pd.read_csv('your_data.csv')
 ```
-## Calculate single indicators
-```
+
+### Calculate single indicators
+
+```python
 df = ta.rsi(df)
 df = ta.macd(df)
+df = ta.dema(df)          # NEW: Double EMA
+df = ta.tema(df)          # NEW: Triple EMA
+df = ta.t3(df)            # NEW: Tillson T3
+df = ta.natr(df)          # NEW: Normalized ATR
+df = ta.bop(df)           # NEW: Balance of Power
+df = ta.mom(df)           # NEW: Momentum
 ```
-## Apply multiple indicators efficiently in one call
-```
+
+### Apply multiple indicators efficiently in one call
+
+```python
 df = ta.custom(df,
     ['rsi', 14],              # With specific parameter
     ['macd', 12, 26, 9],      # With multiple parameters
     ['bb', {'window': 20}],   # With keyword arguments
+    ['dema'],                 # NEW indicators
     ['atr']                   # With default parameters
 )
 ```
-## Calculate trading signals
-```
-df = ta.rsi_m(df)  # Momentum signal
-df = ta.rsi_z(df)  # Zone signal (overbought/oversold)
-df = ta.rsi_t(df)  # Trend signal
+
+### Calculate trading signals
+
+```python
+df = ta.rsi_m(df)    # Momentum signal
+df = ta.rsi_z(df)    # Zone signal (overbought/oversold)
+df = ta.rsi_t(df)    # Trend signal
+df = ta.dema_m(df)   # NEW: DEMA momentum crossover
+df = ta.natr_v(df)   # NEW: NATR volatility flag
+df = ta.bop_z(df)    # NEW: Balance of Power zone
 ```
 
 ## Demo
@@ -53,36 +71,71 @@ https://colab.research.google.com/drive/1BT6Utx_AelOxjPkMqUpFptMX3CH0WUdl?usp=sh
 
 
 ## Indicator Categories
--Trend Indicators
-SMA, EMA, DEMA, TEMA, KAMA, MACD, Bollinger Bands, Parabolic SAR, Ichimoku Cloud, and more.
 
-- Momentum Indicators
-RSI, Stochastic Oscillator, CCI, Williams %R, ADX, TRIX, Ultimate Oscillator, and more.
+### Trend / Overlap Indicators
+SMA, EMA, **DEMA**, **TEMA**, **T3**, **TRIMA**, KAMA, MACD, Bollinger Bands, Parabolic SAR, Ichimoku Cloud, **Acceleration Bands**, **Midpoint**, **Midprice**, and more.
 
-- Volatility Indicators
-ATR, Bollinger Bands Width, Keltner Channel Width, Choppiness Index, and more.
+### Momentum Indicators
+RSI, Stochastic Oscillator, **Fast Stochastic (STOCHF)**, CCI, Williams %R, ADX, **ADXR**, **APO**, **MOM**, **BOP**, **Aroon Oscillator**, TRIX, Ultimate Oscillator, **IMI**, **ROCP**, **Linear Regression Slope**, and more.
 
-- Volume Indicators
-OBV, Chaikin Money Flow, MFI, Volume Price Trend, Ease of Movement, and more.
+### Volatility Indicators
+ATR, **NATR**, **True Range**, Bollinger Bands Width, Keltner Channel Width, Choppiness Index, **Rolling Std Dev**, and more.
+
+### Volume Indicators
+OBV, Chaikin Money Flow, **Chaikin A/D Oscillator (ADOSC)**, MFI, Volume Price Trend, Ease of Movement, and more.
 
 ## Signal Types
-Momentum Signals (_m): Identify potential reversals or continuations
-Zone Signals (_z): Identify overbought/oversold conditions
-Trend Signals (_t): Identify trend direction
-Volatility Signals (_v): Identify periods of high or low volatility
+
+| Suffix | Type | Description |
+|--------|------|-------------|
+| `_m` | Momentum | Crossover/zero-cross reversal signals |
+| `_z` | Zone | Overbought/oversold conditions |
+| `_t` | Trend | Trend direction (above/below) |
+| `_v` | Volatility | High/low volatility flags |
+
+### Signal Values
+
+All directional signals (`_m`, `_z`, `_t`) return an **int8** column:
+
+| Value | Meaning |
+|-------|---------|
+| **-1** | **BUY** signal (bullish condition) |
+| **0** | No signal (neutral) |
+| **+1** | **SELL** signal (bearish condition) |
+
+Volatility flags (`_v`) return: **1** = high volatility detected, **0** = normal.
+
+## What's New in v2.0.0
+
+- **20 new indicators**: DEMA, TEMA, T3, TRIMA, MOM, APO, BOP, ADOSC, NATR, TRANGE, STOCHF, AROONOSC, ADXR, IMI, ACCBANDS, MIDPOINT, MIDPRICE, LINEARREG_SLOPE, ROCP, STDDEV
+- **27 new signal methods** for the above indicators
+- **Type annotations** on all 243 public methods
+- **Safe division helpers** preventing ±inf from zero denominators
+- **Wilder RMA** helper for correct ATR/RSI-family smoothing
+- Python 3.9+ required (was 3.7+)
 
 ## Disclaimer
-This software is provided 'as-is', without any express or implied warranty. The calculations and indicators provided by this library are for informational purposes only and should not be construed as financial advice. The author is not responsible for any errors, inaccuracies, or misuse of this library. Trading and investing involve risk, and you should always conduct your own research before making financial decisions. In no event will the author be held liable for any financial losses or damages arising from the use of this software.
+
+**This software is provided "as-is" without any express or implied warranty.**
+
+The technical indicators and trading signals generated by this library are based on mathematical formulas applied to historical price data. While the implementations follow established references (TA-Lib, standard formulas), **there is no guarantee that the calculations are free of errors, bugs, or inaccuracies**. Discrepancies between this library and other implementations may exist due to differences in smoothing methods, warm-up handling, or edge-case behavior.
+
+The output of this library is for **informational and educational purposes only** and should **not** be construed as financial advice or trading recommendations. Signals (buy/sell indicators) are pattern detections, not predictions — they may produce false positives, lag behind price action, or fail entirely in certain market conditions.
+
+**The author is not responsible for any financial losses, trading errors, or damages** arising from the use of this software, whether caused by calculation errors, misinterpretation of signals, or any other reason. Trading and investing involve substantial risk of loss. You should always conduct your own independent research, verify calculations against multiple sources, and consult with a qualified financial advisor before making any investment decisions.
+
+By using this library, you acknowledge and accept these risks.
 
 ## License
 
-This project is licensed under a custom license that allows free use including commercial applications, 
+This project is licensed under a custom license that allows free use including commercial applications,
 but prohibits selling the software itself or derivatives. See the LICENSE file for details.
 
 ## Support Development
+
 If you find Tecana useful and would like to support its development:
 
-- Bitcoin (Netowork: BTC - SegWit): bc1q496gksyalywftwg4q0hjqs4nuexgxpe638h6lu
-- Ethereum (Netowork: ETH - ERC20): 0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3
-- Solana (Netowork: SOL - Solana): 534JQmpyuA9a4WZvdRW33aon3n69r2od61SQcX8EfSxn
-- USDC (Netowork: ETH - ERC20): 0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3
+- Bitcoin (Network: BTC - SegWit): bc1q496gksyalywftwg4q0hjqs4nuexgxpe638h6lu
+- Ethereum (Network: ETH - ERC20): 0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3
+- Solana (Network: SOL - Solana): 534JQmpyuA9a4WZvdRW33aon3n69r2od61SQcX8EfSxn
+- USDC (Network: ETH - ERC20): 0x4ed38015d1cf0f4cea2010f5aea3f34f9878d0d3

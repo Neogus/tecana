@@ -71,6 +71,11 @@ venv.bak/
 *.swp
 *.swo
 
+
+# Project-local docs (not for repo)
+PROJECT_CONTEXT.md
+LINKEDIN_PROJECT.md
+LINKEDIN_POST.md
 # OS specific files
 .DS_Store
 Thumbs.db

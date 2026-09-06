@@ -8,7 +8,7 @@ with open(os.path.join(this_directory, "README_PYPI.md"), "r", encoding="utf-8")
 
 setup(
     name="tecana",
-    version="1.1.0",
+    version="2.0.0",
     author="Gustavo Rabino",
     author_email="gusrab@gmail.com",
     description="A high-performance technical analysis library for financial markets",
@@ -27,7 +27,7 @@ setup(
         "Development Status :: 4 - Beta",
     ],
     packages=find_packages(),
-    python_requires=">=3.7",
+    python_requires=">=3.9",
     install_requires=[
         "numpy>=1.20.0",
         "pandas>=1.3.0",
